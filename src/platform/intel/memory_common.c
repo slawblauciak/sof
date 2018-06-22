@@ -114,6 +114,5 @@ struct mm memmap = {
 		.caps = SOF_MEM_CAPS_RAM | SOF_MEM_CAPS_LP |
 			SOF_MEM_CAPS_CACHE | SOF_MEM_CAPS_DMA,
 	},
-	.total = {.free = HEAP_SYSTEM_SIZE + HEAP_RUNTIME_SIZE +
-			HEAP_HP_BUFFER_SIZE + HEAP_LP_BUFFER_SIZE,},
+	.total = {.free = HEAP_TOTAL,},
 };

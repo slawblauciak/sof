@@ -6,15 +6,19 @@ EXTRA_DIST = \
 
 noinst_LIBRARIES = libplatform.a
 
+PLATFORM_COMMON_SOURCES = \
+	../intel/memory_common.c \
+	../intel/platform_common.c \
+	../intel/pm_runtime_common.c \
+	../intel/timer_common.c
+
 libplatform_a_SOURCES = \
+	$(PLATFORM_COMMON_SOURCES) \
 	platform.c \
 	dai.c \
 	dma.c \
 	clk.c \
-	timer.c \
-	interrupt.c \
-	memory.c \
-	pm_runtime.c
+	interrupt.c
 
 libplatform_a_CFLAGS = \
 	$(ARCH_CFLAGS) \

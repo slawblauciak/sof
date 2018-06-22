@@ -30,191 +30,19 @@
  *         Rander Wang <rander.wang@intel.com>
  */
 
-#include <platform/memory.h>
-#include <platform/mailbox.h>
 #include <platform/shim.h>
-#include <platform/dma.h>
 #include <platform/clk.h>
 #include <platform/timer.h>
-#include <platform/interrupt.h>
+#include <platform/cavs/platform_common.h>
 #include <uapi/ipc.h>
-#include <sof/mailbox.h>
 #include <sof/dai.h>
 #include <sof/dma.h>
-#include <sof/sof.h>
+#include <sof/agent.h>
 #include <sof/work.h>
 #include <sof/clock.h>
-#include <sof/ipc.h>
-#include <sof/agent.h>
 #include <sof/io.h>
+#include <sof/ipc.h>
 #include <sof/trace.h>
-#include <sof/audio/component.h>
-#include <config.h>
-#include <string.h>
-#include <version.h>
-
-static const struct sof_ipc_fw_ready ready = {
-	.hdr = {
-		.cmd = SOF_IPC_FW_READY,
-		.size = sizeof(struct sof_ipc_fw_ready),
-	},
-	.version = {
-		.build = SOF_BUILD,
-		.minor = SOF_MINOR,
-		.major = SOF_MAJOR,
-		.date = __DATE__,
-		.time = __TIME__,
-		.tag = SOF_TAG,
-	},
-};
-
-#define SRAM_WINDOW_HOST_OFFSET(x)	(0x80000 + x * 0x20000)
-
-#define NUM_CNL_WINDOWS		7
-
-static const struct sof_ipc_window sram_window = {
-	.ext_hdr	= {
-		.hdr.cmd = SOF_IPC_FW_READY,
-		.hdr.size = sizeof(struct sof_ipc_window) +
-			sizeof(struct sof_ipc_window_elem) * NUM_CNL_WINDOWS,
-		.type	= SOF_IPC_EXT_WINDOW,
-	},
-	.num_windows	= NUM_CNL_WINDOWS,
-	.window	= {
-		{
-			.type	= SOF_IPC_REGION_REGS,
-			.id	= 0,	/* map to host window 0 */
-			.flags	= 0, // TODO: set later
-			.size	= MAILBOX_SW_REG_SIZE,
-			.offset	= 0,
-		},
-		{
-			.type	= SOF_IPC_REGION_UPBOX,
-			.id	= 0,	/* map to host window 0 */
-			.flags	= 0, // TODO: set later
-			.size	= MAILBOX_DSPBOX_SIZE,
-			.offset	= MAILBOX_SW_REG_SIZE,
-		},
-		{
-			.type	= SOF_IPC_REGION_DOWNBOX,
-			.id	= 1,	/* map to host window 1 */
-			.flags	= 0, // TODO: set later
-			.size	= MAILBOX_HOSTBOX_SIZE,
-			.offset	= 0,
-		},
-		{
-			.type	= SOF_IPC_REGION_DEBUG,
-			.id	= 2,	/* map to host window 2 */
-			.flags	= 0, // TODO: set later
-			.size	= MAILBOX_EXCEPTION_SIZE + MAILBOX_DEBUG_SIZE,
-			.offset	= 0,
-		},
-		{
-			.type	= SOF_IPC_REGION_EXCEPTION,
-			.id	= 2,	/* map to host window 2 */
-			.flags	= 0, // TODO: set later
-			.size	= MAILBOX_EXCEPTION_SIZE,
-			.offset	= MAILBOX_EXCEPTION_OFFSET,
-		},
-		{
-			.type	= SOF_IPC_REGION_STREAM,
-			.id	= 2,	/* map to host window 2 */
-			.flags	= 0, // TODO: set later
-			.size	= MAILBOX_STREAM_SIZE,
-			.offset	= MAILBOX_STREAM_OFFSET,
-		},
-		{
-			.type	= SOF_IPC_REGION_TRACE,
-			.id	= 3,	/* map to host window 3 */
-			.flags	= 0, // TODO: set later
-			.size	= MAILBOX_TRACE_SIZE,
-			.offset	= 0,
-		},
-	},
-};
-
-static struct work_queue_timesource platform_generic_queue = {
-	.timer	 = {
-		.id = TIMER3, /* external timer */
-		.irq = IRQ_EXT_TSTAMP0_LVL2(0),
-	},
-	.clk		= CLK_SSP,
-	.notifier	= NOTIFIER_ID_SSP_FREQ,
-	.timer_set	= platform_timer_set,
-	.timer_clear	= platform_timer_clear,
-	.timer_get	= platform_timer_get,
-};
-
-struct timer *platform_timer = &platform_generic_queue.timer;
-
-int platform_boot_complete(uint32_t boot_message)
-{
-	mailbox_dspbox_write(0, &ready, sizeof(ready));
-	mailbox_dspbox_write(sizeof(ready), &sram_window,
-		sram_window.ext_hdr.hdr.size);
-
-	/* tell host we are ready */
-	ipc_write(IPC_DIPCIDD, SRAM_WINDOW_HOST_OFFSET(0) >> 12);
-	ipc_write(IPC_DIPCIDR, 0x80000000 | SOF_IPC_FW_READY);
-
-	return 0;
-}
-
-static void platform_memory_windows_init(void)
-{
-	/* window0, for fw status & outbox/uplink mbox */
-	io_reg_write(DMWLO(0), HP_SRAM_WIN0_SIZE | 0x7);
-	io_reg_write(DMWBA(0), HP_SRAM_WIN0_BASE
-		| DMWBA_READONLY | DMWBA_ENABLE);
-	bzero((void *)(HP_SRAM_WIN0_BASE + SRAM_REG_FW_END),
-	      HP_SRAM_WIN0_SIZE - SRAM_REG_FW_END);
-	dcache_writeback_region((void *)(HP_SRAM_WIN0_BASE + SRAM_REG_FW_END),
-				HP_SRAM_WIN0_SIZE - SRAM_REG_FW_END);
-
-	/* window1, for inbox/downlink mbox */
-	io_reg_write(DMWLO(1), HP_SRAM_WIN1_SIZE | 0x7);
-	io_reg_write(DMWBA(1), HP_SRAM_WIN1_BASE
-		| DMWBA_ENABLE);
-	bzero((void *)HP_SRAM_WIN1_BASE, HP_SRAM_WIN1_SIZE);
-	dcache_writeback_region((void *)HP_SRAM_WIN1_BASE, HP_SRAM_WIN1_SIZE);
-
-	/* window2, for debug */
-	io_reg_write(DMWLO(2), HP_SRAM_WIN2_SIZE | 0x7);
-	io_reg_write(DMWBA(2), HP_SRAM_WIN2_BASE
-		| DMWBA_READONLY | DMWBA_ENABLE);
-	bzero((void *)HP_SRAM_WIN2_BASE, HP_SRAM_WIN2_SIZE);
-	dcache_writeback_region((void *)HP_SRAM_WIN2_BASE, HP_SRAM_WIN2_SIZE);
-
-	/* window3, for trace */
-	io_reg_write(DMWLO(3), HP_SRAM_WIN3_SIZE | 0x7);
-	io_reg_write(DMWBA(3), HP_SRAM_WIN3_BASE
-		| DMWBA_READONLY | DMWBA_ENABLE);
-	bzero((void *)HP_SRAM_WIN3_BASE, HP_SRAM_WIN3_SIZE);
-	dcache_writeback_region((void *)HP_SRAM_WIN3_BASE, HP_SRAM_WIN3_SIZE);
-}
-
-/* init HW  */
-static void platform_init_hw(void)
-{
-	io_reg_write(DSP_INIT_GENO,
-		GENO_MDIVOSEL | GENO_DIOPTOSEL);
-
-	io_reg_write(DSP_INIT_IOPO,
-		IOPO_DMIC_FLAG |IOPO_I2S_FLAG);
-
-	io_reg_write(DSP_INIT_ALHO,
-		ALHO_ASO_FLAG | ALHO_CSO_FLAG | ALHO_CFO_FLAG);
-
-	io_reg_write(DSP_INIT_LPGPDMA(0),
-		LPGPDMA_CHOSEL_FLAG | LPGPDMA_CTLOSEL_FLAG);
-	io_reg_write(DSP_INIT_LPGPDMA(1),
-		LPGPDMA_CHOSEL_FLAG | LPGPDMA_CTLOSEL_FLAG);
-}
-
-static struct timer platform_ext_timer = {
-	.id = TIMER3,
-	.irq = IRQ_EXT_TSTAMP0_LVL2(0),
-};
 
 int platform_init(struct sof *sof)
 {

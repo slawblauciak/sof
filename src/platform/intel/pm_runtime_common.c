@@ -29,8 +29,8 @@
  */
 
 /**
- * \file platform/cannonlake/pm_runtime.c
- * \brief Runtime power management implementation specific for Cannonlake
+ * \file platform/intel/pm_runtime.c
+ * \brief Runtime power management implementation
  * \author Tomasz Lauda <tomasz.lauda@linux.intel.com>
  */
 

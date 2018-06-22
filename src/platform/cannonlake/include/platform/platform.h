@@ -118,6 +118,38 @@ struct sof;
 /* minimal L1 exit time in cycles */
 #define PLATFORM_FORCE_L1_EXIT_TIME	482
 
+/* number of IPC windows */
+#define PLATFORM_NUM_IPC_WINDOWS 7
+
+/* the first IPC register to inform the driver of FW readiness */
+#define PLATFORM_RDY_IPC_REG1 IPC_DIPCIDD
+
+/* the second IPC register to inform the driver of FW readiness */
+#define PLATFORM_RDY_IPC_REG2 IPC_DIPCIDR
+
+/* SSP frequency in Hz */
+#define PLATFORM_SSP_FREQ 24000000
+
+/* init HW  */
+static inline void platform_init_hw(void)
+{
+	io_reg_write(DSP_INIT_GENO,
+		GENO_MDIVOSEL | GENO_DIOPTOSEL);
+
+	io_reg_write(DSP_INIT_IOPO,
+		IOPO_DMIC_FLAG | IOPO_I2S_FLAG);
+
+	io_reg_write(DSP_INIT_ALHO,
+		ALHO_ASO_FLAG | ALHO_CSO_FLAG | ALHO_CFO_FLAG);
+
+	io_reg_write(DSP_INIT_LPGPDMA(0),
+		LPGPDMA_CHOSEL_FLAG | LPGPDMA_CTLOSEL_FLAG);
+	io_reg_write(DSP_INIT_LPGPDMA(1),
+		LPGPDMA_CHOSEL_FLAG | LPGPDMA_CTLOSEL_FLAG);
+}
+
+#define PLATFORM_PRE_INIT do { platform_init_hw(); } while (0)
+
 /* Platform defined trace code */
 static inline void platform_panic(uint32_t p)
 {

@@ -121,6 +121,21 @@ struct sof;
 /* minimal L1 exit time in cycles */
 #define PLATFORM_FORCE_L1_EXIT_TIME	585
 
+/* number of IPC windows */
+#define PLATFORM_NUM_IPC_WINDOWS 7
+
+/* the CPU frequency should be reset to default after the boot sequence */
+#define PLATFORM_POST_BOOT_CPU_FREQ_RESET
+
+/* the first IPC register to inform the driver of FW readiness */
+#define PLATFORM_RDY_IPC_REG1 IPC_DIPCIE
+
+/* the second IPC register to inform the driver of FW readiness */
+#define PLATFORM_RDY_IPC_REG2 IPC_DIPCI
+
+/* SSP frequency in Hz */
+#define PLATFORM_SSP_FREQ 19200000
+
 /* Platform defined panic code */
 static inline void platform_panic(uint32_t p)
 {

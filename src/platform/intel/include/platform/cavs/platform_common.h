@@ -25,43 +25,13 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Author: Tomasz Lauda <tomasz.lauda@linux.intel.com>
+ * Author: Slawomir Blauciak <slawomir.blauciak@linux.intel.com>
  */
 
-/**
- * \file platform/apollolake/pm_runtime.c
- * \brief Runtime power management implementation specific for Apollolake
- * \author Tomasz Lauda <tomasz.lauda@linux.intel.com>
- */
+#include <arch/timer.h>
+#include <sof/work.h>
 
-#include <sof/alloc.h>
-#include <platform/platform.h>
-#include <platform/pm_runtime.h>
-#include <platform/cavs/pm_runtime.h>
+extern struct work_queue_timesource platform_generic_queue;
+extern struct timer platform_ext_timer;
 
-/** \brief Runtime power management data pointer. */
-struct pm_runtime_data *_prd;
-
-void platform_pm_runtime_init(struct pm_runtime_data *prd)
-{
-	struct platform_pm_runtime_data *pprd;
-
-	_prd = prd;
-
-	pprd = rzalloc(RZONE_SYS, SOF_MEM_CAPS_RAM, sizeof(*pprd));
-	_prd->platform_data = pprd;
-}
-
-void platform_pm_runtime_get(enum pm_runtime_context context)
-{
-	/* Action based on context */
-}
-
-void platform_pm_runtime_put(enum pm_runtime_context context)
-{
-	switch (context) {
-	case PM_RUNTIME_HOST_DMA_L1:
-		cavs_pm_runtime_force_host_dma_l1_exit();
-		break;
-	}
-}
+void platform_memory_windows_init(void);
