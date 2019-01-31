@@ -64,6 +64,7 @@ enum sof_comp_type {
 	SOF_COMP_EQ_FIR,
 	SOF_COMP_FILEREAD,	/**< host test based file IO */
 	SOF_COMP_FILEWRITE,	/**< host test based file IO */
+	SOF_COMP_KEYDETECT_DUMMY,
 };
 
 /* XRUN action for component */
@@ -191,6 +192,12 @@ struct sof_ipc_comp_tone {
 	int32_t period;
 	int32_t repeats;
 	int32_t ramp_step;
+} __attribute__((packed));
+
+/* generic KEYDETECT_DUMMY component */
+struct sof_ipc_comp_keydetect_dummy {
+	struct sof_ipc_comp comp;
+	struct sof_ipc_comp_config config;
 } __attribute__((packed));
 
 /** \brief Types of EFFECT */

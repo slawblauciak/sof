@@ -97,6 +97,7 @@ static const char * get_component_name(uint32_t component_id) {
 		CASE(DMIC);
 		CASE(POWER);
 		CASE(SCHEDULE);
+		CASE(KEYDETECT_DUMMY);
 	default: return "unknown";
 	}
 }
