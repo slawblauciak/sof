@@ -57,13 +57,37 @@ static void keydetect_dummy_function(struct comp_dev *dev,
 {
 }
 
+/**
+ * \brief Sets keydetect_dummy control command.
+ * \param[in,out] dev keydetect_dummy base component device.
+ * \param[in,out] cdata Control command data.
+ * \return Error code.
+ */
+static int keydetect_dummy_ctrl_set_cmd(struct comp_dev *dev,
+	struct sof_ipc_ctrl_data *cdata)
+{
+	return 0;
+}
+
+/**
+ * \brief Gets keydetect_dummy control command.
+ * \param[in,out] dev keydetect_dummy component device.
+ * \param[in,out] cdata Control command data.
+ * \return Error code.
+ */
+static int keydetect_dummy_ctrl_get_cmd(struct comp_dev *dev,
+	struct sof_ipc_ctrl_data *cdata, int size)
+{
+	return 0
+}
+
 static struct comp_dev *keydetect_dummy_new(struct sof_ipc_comp *comp)
 {
 	struct comp_dev *dev;
 	struct sof_ipc_comp_keydetect_dummy *keydetect_dummy;
 	struct sof_ipc_comp_keydetect_dummy *ipc_keydetect_dummy =
 		(struct sof_ipc_comp_keydetect_dummy *)comp;
-	struct keydetect_dummy_data *cd;
+	struct keydetect_dummy_data *kdd;
 
 	trace_keydetect_dummy("keydetect_dummy_new()");
 
@@ -76,13 +100,13 @@ static struct comp_dev *keydetect_dummy_new(struct sof_ipc_comp *comp)
 	memcpy(keydetect_dummy, ipc_keydetect_dummy,
 		sizeof(struct sof_ipc_comp_keydetect_dummy));
 
-	cd = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM, sizeof(*cd));
-	if (!cd) {
+	kdd = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM, sizeof(*kdd));
+	if (!kdd) {
 		rfree(dev);
 		return NULL;
 	}
 
-	comp_set_drvdata(dev, cd);
+	comp_set_drvdata(dev, kdd);
 	dev->state = COMP_STATE_READY;
 
 	return dev;
@@ -90,11 +114,11 @@ static struct comp_dev *keydetect_dummy_new(struct sof_ipc_comp *comp)
 
 static void keydetect_dummy_free(struct comp_dev *dev)
 {
-	struct keydetect_dummy_data *cd = comp_get_drvdata(dev);
+	struct keydetect_dummy_data *kdd = comp_get_drvdata(dev);
 
 	trace_keydetect_dummy("keydetect_dummy_free()");
 
-	rfree(cd);
+	rfree(kdd);
 	rfree(dev);
 }
 
@@ -115,8 +139,44 @@ static int keydetect_dummy_params(struct comp_dev *dev)
 static int keydetect_dummy_cmd(struct comp_dev *dev, int cmd, void *data,
 		   int max_data_size)
 {
-	/* keydetect_dummy will use buffer "connected" status */
-	return 0;
+	struct sof_ipc_ctrl_data *cdata = data;
+
+	trace_keydetect_dummy("keydetect_dummy_cmd()");
+
+	switch (cmd) {
+	case COMP_CMD_SET_VALUE:
+		return trace_keydetect_ctrl_set_cmd(dev, cdata);
+	case COMP_CMD_GET_VALUE:
+		return trace_keydetect_ctrl_get_cmd(dev, cdata, max_data_size);
+	default:
+		return -EINVAL;
+	}
+}
+
+/* used to pass standard and bespoke commands (with data) to component */
+static int keydetect_dummy_trigger(struct comp_dev *dev, int cmd)
+{
+	int ret;
+
+	trace_mixer("keydetect_dummy_trigger()");
+
+	ret = comp_set_state(dev, cmd);
+	if (ret < 0)
+		return ret;
+
+	switch (cmd) {
+	case COMP_TRIGGER_START:
+	case COMP_TRIGGER_RELEASE:
+		return 1; /* no need to go downstream */
+	case COMP_TRIGGER_PAUSE:
+	case COMP_TRIGGER_STOP:
+		dev->state = COMP_STATE_ACTIVE;
+		return 1; /* no need to go downstream */
+	default:
+		break;
+	}
+
+	return 0; /* send cmd downstream */
 }
 
 /* copy and process stream data from source to sink buffers */
@@ -128,7 +188,7 @@ static int keydetect_dummy_copy(struct comp_dev *dev)
 
 static int keydetect_dummy_reset(struct comp_dev *dev)
 {
-	trace_keydetect_dummy("volume_reset()");
+	trace_keydetect_dummy("keydetect_dummy_reset()");
 
 	comp_set_state(dev, COMP_TRIGGER_RESET);
 	return 0;
@@ -136,7 +196,7 @@ static int keydetect_dummy_reset(struct comp_dev *dev)
 
 static int keydetect_dummy_prepare(struct comp_dev *dev)
 {
-	struct keydetect_dummy_data *cd = comp_get_drvdata(dev);
+	struct keydetect_dummy_data *kdd = comp_get_drvdata(dev);
 	int ret;
 
 	trace_keydetect_dummy("keydetect_dummy_prepare()");
@@ -145,7 +205,7 @@ static int keydetect_dummy_prepare(struct comp_dev *dev)
 	if (dev->state != COMP_STATE_ACTIVE) {
 
 		/* currently inactive so setup */
-		cd->keydetect_dummy_func = keydetect_dummy_function;
+		kdd->keydetect_dummy_func = keydetect_dummy_function;
 
 		ret = comp_set_state(dev, COMP_TRIGGER_PREPARE);
 		if (ret < 0)
@@ -162,15 +222,15 @@ static int keydetect_dummy_prepare(struct comp_dev *dev)
  */
 static void keydetect_dummy_cache(struct comp_dev *dev, int cmd)
 {
-	struct keydetect_dummy_data *cd;
+	struct keydetect_dummy_data *kdd;
 
 	switch (cmd) {
 	case CACHE_WRITEBACK_INV:
 		trace_keydetect_dummy("keydetect_dummy_cache(), CACHE_WRITEBACK_INV");
 
-		cd = comp_get_drvdata(dev);
+		kdd = comp_get_drvdata(dev);
 
-		dcache_writeback_invalidate_region(cd, sizeof(*cd));
+		dcache_writeback_invalidate_region(kdd, sizeof(*kdd));
 		dcache_writeback_invalidate_region(dev, sizeof(*dev));
 		break;
 
@@ -179,8 +239,8 @@ static void keydetect_dummy_cache(struct comp_dev *dev, int cmd)
 
 		dcache_invalidate_region(dev, sizeof(*dev));
 
-		cd = comp_get_drvdata(dev);
-		dcache_invalidate_region(cd, sizeof(*cd));
+		kdd = comp_get_drvdata(dev);
+		dcache_invalidate_region(kdd, sizeof(*kdd));
 		break;
 	}
 }
@@ -192,6 +252,7 @@ struct comp_driver comp_keydetect_dummy = {
 		.free		= keydetect_dummy_free,
 		.params		= keydetect_dummy_params,
 		.cmd		= keydetect_dummy_cmd,
+		.trigger	= keydetect_dummy_trigger,
 		.copy		= keydetect_dummy_copy,
 		.prepare	= keydetect_dummy_prepare,
 		.reset		= keydetect_dummy_reset,
