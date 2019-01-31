@@ -23,6 +23,7 @@ if(NOT BUILD_HOST)
 		pipeline_static.c
 		component.c
 		buffer.c
+		keydetect_dummy.c
 	)
 	return()
 endif()
