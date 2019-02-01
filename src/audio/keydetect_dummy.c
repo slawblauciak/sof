@@ -66,6 +66,8 @@ static void keydetect_dummy_function(struct comp_dev *dev,
 static int keydetect_dummy_ctrl_set_cmd(struct comp_dev *dev,
 	struct sof_ipc_ctrl_data *cdata)
 {
+	trace_keydetect_dummy("keydetect_dummy_ctrl_set_cmd()");
+
 	return 0;
 }
 
@@ -78,7 +80,9 @@ static int keydetect_dummy_ctrl_set_cmd(struct comp_dev *dev,
 static int keydetect_dummy_ctrl_get_cmd(struct comp_dev *dev,
 	struct sof_ipc_ctrl_data *cdata, int size)
 {
-	return 0
+	trace_keydetect_dummy("keydetect_dummy_ctrl_get_cmd()");
+
+	return 0;
 }
 
 static struct comp_dev *keydetect_dummy_new(struct sof_ipc_comp *comp)
@@ -145,9 +149,9 @@ static int keydetect_dummy_cmd(struct comp_dev *dev, int cmd, void *data,
 
 	switch (cmd) {
 	case COMP_CMD_SET_VALUE:
-		return trace_keydetect_ctrl_set_cmd(dev, cdata);
+		return keydetect_dummy_ctrl_set_cmd(dev, cdata);
 	case COMP_CMD_GET_VALUE:
-		return trace_keydetect_ctrl_get_cmd(dev, cdata, max_data_size);
+		return keydetect_dummy_ctrl_get_cmd(dev, cdata, max_data_size);
 	default:
 		return -EINVAL;
 	}
@@ -158,7 +162,7 @@ static int keydetect_dummy_trigger(struct comp_dev *dev, int cmd)
 {
 	int ret;
 
-	trace_mixer("keydetect_dummy_trigger()");
+	trace_keydetect_dummy("keydetect_dummy_trigger()");
 
 	ret = comp_set_state(dev, cmd);
 	if (ret < 0)
@@ -182,6 +186,7 @@ static int keydetect_dummy_trigger(struct comp_dev *dev, int cmd)
 /* copy and process stream data from source to sink buffers */
 static int keydetect_dummy_copy(struct comp_dev *dev)
 {
+	trace_keydetect_dummy("keydetect_dummy_copy()");
 
 	return 0;
 }
