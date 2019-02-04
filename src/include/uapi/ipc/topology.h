@@ -198,6 +198,9 @@ struct sof_ipc_comp_tone {
 struct sof_ipc_comp_keydetect_dummy {
 	struct sof_ipc_comp comp;
 	struct sof_ipc_comp_config config;
+	uint32_t channels;
+	uint32_t min_value;
+	uint32_t max_value;
 } __attribute__((packed));
 
 /** \brief Types of EFFECT */

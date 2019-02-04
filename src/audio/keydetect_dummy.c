@@ -38,15 +38,19 @@
 #include <sof/ipc.h>
 
 /* tracing */
-#define trace_keydetect_dummy(__e) \
-	trace_event(TRACE_CLASS_KEYDETECT_DUMMY, __e)
-#define trace_keydetect_dummy_error(__e) \
-	trace_error(TRACE_CLASS_KEYDETECT_DUMMY, __e)
-#define tracev_keydetect_dummy(__e) \
-	tracev_event(TRACE_CLASS_KEYDETECT_DUMMY, __e)
+#define trace_keydetect_dummy(__e, ...) \
+	trace_event(TRACE_CLASS_KEYDETECT_DUMMY, __e, ##__VA_ARGS__)
+#define trace_keydetect_dummy_error(__e, ...) \
+	trace_error(TRACE_CLASS_KEYDETECT_DUMMY, __e, ##__VA_ARGS__)
+#define tracev_keydetect_dummy(__e, ...) \
+	tracev_event(TRACE_CLASS_KEYDETECT_DUMMY, __e, ##__VA_ARGS__)
 
-/* mixer component private data */
+/* keydetect_dummy component private data */
 struct keydetect_dummy_data {
+	uint32_t source_period_bytes;		/**< source number of period bytes */
+	uint32_t sink_period_bytes;		/**< sink number of period bytes */
+	enum sof_ipc_frame source_format;	/**< source frame format */
+	enum sof_ipc_frame sink_format;		/**< sink frame format */
 	uint32_t period_bytes;
 	void(*keydetect_dummy_func)(struct comp_dev *dev,
 		struct comp_buffer *sink, struct comp_buffer *source);
@@ -160,6 +164,12 @@ static int keydetect_dummy_cmd(struct comp_dev *dev, int cmd, void *data,
 /* used to pass standard and bespoke commands (with data) to component */
 static int keydetect_dummy_trigger(struct comp_dev *dev, int cmd)
 {
+	trace_keydetect_dummy("keydetect_dummy_trigger()");
+
+	return comp_set_state(dev, cmd);
+
+//mlucki
+#if 0
 	int ret;
 
 	trace_keydetect_dummy("keydetect_dummy_trigger()");
@@ -181,14 +191,59 @@ static int keydetect_dummy_trigger(struct comp_dev *dev, int cmd)
 	}
 
 	return 0; /* send cmd downstream */
+#endif
 }
 
 /* copy and process stream data from source to sink buffers */
 static int keydetect_dummy_copy(struct comp_dev *dev)
 {
+	struct keydetect_dummy_data *kdd = comp_get_drvdata(dev);
+	struct comp_buffer *sink;
+	struct comp_buffer *source;
+
+	tracev_keydetect_dummy("keydetect_dummy_copy()");
+
+	/* keydetect_dummy components will only ever have 1 source and 1 sink buffer */
+	source = list_first_item(&dev->bsource_list,
+		struct comp_buffer, sink_list);
+	sink = list_first_item(&dev->bsink_list,
+		struct comp_buffer, source_list);
+
+	/* make sure source component buffer has enough data available and that
+	 * the sink component buffer has enough free bytes for copy. Also
+	 * check for XRUNs
+	 */
+	if (source->avail < kdd->source_period_bytes) {
+		trace_keydetect_dummy_error("keydetect_dummy_copy() error: "
+			"source component buffer"
+			" has not enough data available");
+		comp_underrun(dev, source, kdd->source_period_bytes, 0);
+		return -EIO;	/* xrun */
+	}
+	if (sink->free < kdd->sink_period_bytes) {
+		trace_keydetect_dummy_error("keydetect_dummy_copy() error: "
+			"sink component buffer"
+			" has not enough free bytes for copy");
+		comp_overrun(dev, sink, kdd->sink_period_bytes, 0);
+		return -EIO;	/* xrun */
+	}
+
+
+	/* calc new free and available */
+	comp_update_buffer_produce(sink, kdd->sink_period_bytes);
+	comp_update_buffer_consume(source, kdd->source_period_bytes);
+
+	return dev->frames;
+
+
+#if 0
+	struct keydetect_dummy_data *kdd = comp_get_drvdata(dev);
+
+
 	trace_keydetect_dummy("keydetect_dummy_copy()");
 
 	return 0;
+#endif
 }
 
 static int keydetect_dummy_reset(struct comp_dev *dev)
@@ -201,6 +256,77 @@ static int keydetect_dummy_reset(struct comp_dev *dev)
 
 static int keydetect_dummy_prepare(struct comp_dev *dev)
 {
+	struct keydetect_dummy_data *kdd = comp_get_drvdata(dev);
+	struct comp_buffer *sinkb;
+	struct comp_buffer *sourceb;
+	struct sof_ipc_comp_config *config = COMP_GET_CONFIG(dev);
+	int ret;
+
+
+	trace_keydetect_dummy("keydetect_dummy_prepare()");
+
+	ret = comp_set_state(dev, COMP_TRIGGER_PREPARE);
+	if (ret < 0)
+		return ret;
+
+	kdd->keydetect_dummy_func = keydetect_dummy_function;
+
+	/* keydetect_dummy components will only ever have 1 source and 1 sink buffer */
+	sourceb = list_first_item(&dev->bsource_list,
+		struct comp_buffer, sink_list);
+	sinkb = list_first_item(&dev->bsink_list,
+		struct comp_buffer, source_list);
+
+	/* get source data format */
+	comp_set_period_bytes(sourceb->source, dev->frames, &kdd->source_format,
+		&kdd->source_period_bytes);
+
+	/* get sink data format */
+	comp_set_period_bytes(sinkb->sink, dev->frames, &kdd->sink_format,
+		&kdd->sink_period_bytes);
+
+
+	/* rewrite params format for all downstream */
+	dev->params.frame_fmt = kdd->sink_format;
+
+	dev->frame_bytes = kdd->sink_period_bytes / dev->frames;
+
+	/* set downstream buffer size */
+	ret = buffer_set_size(sinkb, kdd->sink_period_bytes *
+		config->periods_sink);
+	if (ret < 0) {
+		trace_keydetect_dummy_error("volume_prepare() error: "
+			"buffer_set_size() failed");
+		goto err;
+	}
+
+	/* validate */
+	if (kdd->sink_period_bytes == 0) {
+		trace_keydetect_dummy_error("volume_prepare() error: "
+			"kdd->sink_period_bytes = 0, dev->frames ="
+			" %u, sinkb->sink->frame_bytes = %u",
+			dev->frames, sinkb->sink->frame_bytes);
+		ret = -EINVAL;
+		goto err;
+	}
+	if (kdd->source_period_bytes == 0) {
+		trace_keydetect_dummy_error("volume_prepare() error: "
+			"kdd->source_period_bytes = 0, "
+			"dev->frames = %u, "
+			"sourceb->source->frame_bytes = %u",
+			dev->frames, sourceb->source->frame_bytes);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	return 0;
+
+err:
+	comp_set_state(dev, COMP_TRIGGER_RESET);
+	return ret;
+
+
+#if 0
 	struct keydetect_dummy_data *kdd = comp_get_drvdata(dev);
 	int ret;
 
@@ -217,7 +343,8 @@ static int keydetect_dummy_prepare(struct comp_dev *dev)
 			return ret;
 	}
 
-	return -1;
+	return 0;
+#endif
 }
 
 /**

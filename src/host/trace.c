@@ -68,6 +68,7 @@ char *get_trace_class(uint32_t trace_class)
 		CASE(SA);
 		CASE(DMIC);
 		CASE(POWER);
+		CASE(KEYDETECT_DUMMY);
 	default: return "unknown";
 	}
 }
