@@ -52,6 +52,7 @@ struct comp_data {
 	enum sof_ipc_frame source_format;	/**< source frame format */
 	enum sof_ipc_frame sink_format;		/**< sink frame format */
 	uint32_t period_bytes;
+	uint32_t tmp_level;
 	void(*keydetect_dummy_func)(struct comp_dev *dev,
 		struct comp_buffer *sink, struct comp_buffer *source);
 };
@@ -70,7 +71,20 @@ static void keydetect_dummy_function(struct comp_dev *dev,
 static int keydetect_dummy_ctrl_set_cmd(struct comp_dev *dev,
 	struct sof_ipc_ctrl_data *cdata)
 {
-	trace_keydetect_dummy("keydetect_dummy_ctrl_set_cmd()");
+	struct comp_data *cd = comp_get_drvdata(dev);
+
+	switch (cdata->cmd) {
+	case SOF_CTRL_CMD_BINARY:
+		trace_keydetect_dummy("keydetect_dummy_ctrl_set_cmd(), "
+			"SOF_CTRL_CMD_VOLUME, cdata->comp_id = %u",
+			cdata->comp_id);
+		cd->tmp_level = cdata->chanv[0].value;
+		break;
+	default:
+		trace_keydetect_dummy_error("keydetect_dummy_ctrl_set_cmd() "
+			"error: invalid cdata->cmd");
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -84,8 +98,28 @@ static int keydetect_dummy_ctrl_set_cmd(struct comp_dev *dev,
 static int keydetect_dummy_ctrl_get_cmd(struct comp_dev *dev,
 	struct sof_ipc_ctrl_data *cdata, int size)
 {
+	struct comp_data *cd = comp_get_drvdata(dev);
+	int j;
+
 	trace_keydetect_dummy("keydetect_dummy_ctrl_get_cmd()");
 
+	if (cdata->cmd == SOF_CTRL_CMD_BINARY) {
+		trace_keydetect_dummy("keydetect_dummy_ctrl_get_cmd(), "
+			"SOF_CTRL_CMD_VOLUME / SOF_CTRL_CMD_SWITCH, "
+			"cdata->comp_id = %u",
+			cdata->comp_id);
+		j = 0;
+		cdata->chanv[j].channel = 0;
+		cdata->chanv[j].value = cd->tmp_level;
+		trace_keydetect_dummy("keydetect_dummy_ctrl_get_cmd(), "
+			"channel = %u, value = %u",
+			cdata->chanv[j].channel,
+			cdata->chanv[j].value);
+	} else {
+		trace_keydetect_dummy_error("keydetect_dummy_ctrl_get_cmd() "
+			"error: invalid cdata->cmd");
+		return -EINVAL;
+	}
 	return 0;
 }
 
@@ -114,6 +148,7 @@ static struct comp_dev *keydetect_dummy_new(struct sof_ipc_comp *comp)
 		return NULL;
 	}
 
+	cd->tmp_level = 45;
 	comp_set_drvdata(dev, cd);
 	dev->state = COMP_STATE_READY;
 
@@ -133,12 +168,7 @@ static void keydetect_dummy_free(struct comp_dev *dev)
 /* set component audio stream parameters */
 static int keydetect_dummy_params(struct comp_dev *dev)
 {
-	//struct comp_data *cd = comp_get_drvdata(dev);
-
 	trace_keydetect_dummy("keydetect_dummy_params()");
-
-	/* rewrite params format for all downstream */
-	//dev->params.frame_fmt = cd->sink_format;
 
 	return 0;
 }
@@ -167,31 +197,6 @@ static int keydetect_dummy_trigger(struct comp_dev *dev, int cmd)
 	trace_keydetect_dummy("keydetect_dummy_trigger()");
 
 	return comp_set_state(dev, cmd);
-
-//mlucki
-#if 0
-	int ret;
-
-	trace_keydetect_dummy("keydetect_dummy_trigger()");
-
-	ret = comp_set_state(dev, cmd);
-	if (ret < 0)
-		return ret;
-
-	switch (cmd) {
-	case COMP_TRIGGER_START:
-	case COMP_TRIGGER_RELEASE:
-		return 1; /* no need to go downstream */
-	case COMP_TRIGGER_PAUSE:
-	case COMP_TRIGGER_STOP:
-		dev->state = COMP_STATE_ACTIVE;
-		return 1; /* no need to go downstream */
-	default:
-		break;
-	}
-
-	return 0; /* send cmd downstream */
-#endif
 }
 
 /* copy and process stream data from source to sink buffers */
@@ -318,27 +323,6 @@ static int keydetect_dummy_prepare(struct comp_dev *dev)
 err:
 	comp_set_state(dev, COMP_TRIGGER_RESET);
 	return ret;
-
-
-#if 0
-	struct comp_data *cd = comp_get_drvdata(dev);
-	int ret;
-
-	trace_keydetect_dummy("keydetect_dummy_prepare()");
-
-	/* does keydetect_dummy already have active source streams ? */
-	if (dev->state != COMP_STATE_ACTIVE) {
-
-		/* currently inactive so setup */
-		cd->keydetect_dummy_func = keydetect_dummy_function;
-
-		ret = comp_set_state(dev, COMP_TRIGGER_PREPARE);
-		if (ret < 0)
-			return ret;
-	}
-
-	return 0;
-#endif
 }
 
 /**
