@@ -285,7 +285,10 @@
 
 #define SOF_TEXT_START		(HP_SRAM_VECBASE_RESET + 0x400)
 #define SOF_TEXT_BASE		(SOF_TEXT_START)
-#define SOF_TEXT_SIZE		(0x1d000 - 0x400)
+
+//Temporary change:
+//#define SOF_TEXT_SIZE		(0x1d000 - 0x400)
+#define SOF_TEXT_SIZE		(0x1e000 - 0x400)
 
 /* Skylake or kabylake HP-SRAM config */
 #elif defined(CONFIG_KABYLAKE) || defined(CONFIG_SKYLAKE)
