@@ -138,8 +138,11 @@ struct sof_ipc_ctrl_data {
 	struct sof_ipc_host_buffer buffer;
 	uint32_t num_elems;	/**< in array elems or bytes for data type */
 
+	uint32_t total_msgs;
+	uint32_t msg_idx;
+
 	/* reserved for future use */
-	uint32_t reserved[8];
+	uint32_t reserved[6];
 
 	/* control data - add new types if needed */
 	union {

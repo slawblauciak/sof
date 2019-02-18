@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2019, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,6 +26,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * Author: Marek Lucki <marekx.lucki@linux.intel.com>
+ *         Slawomir Blauciak <slawomir.blauciak@linux.intel.com>
  */
 
 #include <stdint.h>
@@ -34,8 +35,8 @@
 #include <sof/list.h>
 #include <sof/stream.h>
 #include <sof/audio/component.h>
-
 #include <sof/ipc.h>
+#include <uapi/user/keydetect_dummy.h>
 
 /* tracing */
 #define trace_keydetect_dummy(__e, ...) \
@@ -44,23 +45,6 @@
 	trace_error(TRACE_CLASS_KEYDETECT_DUMMY, __e, ##__VA_ARGS__)
 #define tracev_keydetect_dummy(__e, ...) \
 	tracev_event(TRACE_CLASS_KEYDETECT_DUMMY, __e, ##__VA_ARGS__)
-
-
-#define SOF_KEYDETECT_DUMMY_MAX_SIZE 1024
-
-/* keydetect_dummy_configuration
- *	uint32_t fulfill_buf_size;
- *         This describes the size of empty fulfill buffer that
- *		   increases component size for tests
- *	uint32_t mips;
- *         This describes the number of additional stress operations
- *		   performed during stream processing
- */
-struct sof_keydetect_dummy_config {
-	uint32_t size;
-	uint32_t fulfill_buf_size;	/**< size of dummy memory fulfillment */
-	uint32_t mips;	/**< number of stream stress operations */
-} __attribute__((packed));
 
 /* keydetect_dummy component private data */
 struct comp_data {
@@ -74,12 +58,12 @@ struct comp_data {
 	char *fulfill_buff;			/**< dummy memory buffer */
 	struct sof_keydetect_dummy_config *config;
 
-	void (*main_dummy_func)(struct comp_dev *dev,
-		struct comp_buffer *sink, struct comp_buffer *source);
+	void (*dummy_func)(struct comp_dev *dev, struct comp_buffer *sink,
+				struct comp_buffer *source);
 };
 
-static void main_dummy_function(struct comp_dev *dev,
-	struct comp_buffer *sink, struct comp_buffer *source)
+static void main_dummy_function(struct comp_dev *dev, struct comp_buffer *sink,
+				struct comp_buffer *source)
 {
 }
 
@@ -99,11 +83,12 @@ static int create_dummy_buffer(struct comp_data *cd, uint32_t size)
 
 	if (size == 0)
 		return 0;
-	cd->fulfill_buff = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM,
-		size);
+
+	cd->fulfill_buff = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM, size);
+
 	if (cd->fulfill_buff == NULL) {
 		trace_keydetect_dummy_error("create_dummy_buffer()"
-			"alloc failed");
+					    "alloc failed");
 		return -ENOMEM;
 	}
 
@@ -115,7 +100,7 @@ static int free_dummy_buffer(struct comp_data *cd)
 {
 	if (cd == NULL) {
 		trace_keydetect_dummy_error("free_dummy_buffer() "
-			"error: invalid cd");
+					    "error: invalid cd");
 		return -EINVAL;
 	}
 
@@ -155,18 +140,18 @@ static int keydetect_dummy_cmd_set_data(struct comp_dev *dev,
 	/* Check version from ABI header */
 	if (SOF_ABI_VERSION_INCOMPATIBLE(SOF_ABI_VERSION, cdata->data->abi)) {
 		trace_keydetect_dummy_error("keydetect_dummy_cmd_set_data() "
-			"error: invalid version");
+					    "error: invalid version");
 		return -EINVAL;
 	}
 
 	switch (cdata->cmd) {
 	case SOF_CTRL_CMD_ENUM:
 		trace_keydetect_dummy("keydetect_dummy_cmd_set_data(),"
-			"SOF_CTRL_CMD_ENUM");
+				      "SOF_CTRL_CMD_ENUM");
 		break;
 	case SOF_CTRL_CMD_BINARY:
 		trace_keydetect_dummy("keydetect_dummy_cmd_set_data(),"
-			"SOF_CTRL_CMD_BINARY");
+				      "SOF_CTRL_CMD_BINARY");
 
 		if (dev->state != COMP_STATE_READY) {
 			/* It is a valid request but currently this is not
@@ -433,7 +418,7 @@ static int keydetect_dummy_copy(struct comp_dev *dev)
 		return -EIO;	/* xrun */
 	}
 
-	cd->main_dummy_func(dev, sink, source);
+	cd->dummy_func(dev, sink, source);
 
 	/* calc new free and available */
 	comp_update_buffer_produce(sink, cd->sink_period_bytes);
@@ -483,7 +468,7 @@ static int keydetect_dummy_prepare(struct comp_dev *dev)
 		return -EINVAL;
 	}
 
-	cd->main_dummy_func = main_dummy_function;
+	cd->dummy_func = main_dummy_function;
 
 	/* keydetect_dummy components
 	 * will only ever have 1 source and 1 sink buffer

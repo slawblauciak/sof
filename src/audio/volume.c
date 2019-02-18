@@ -262,6 +262,9 @@ static inline void volume_set_chan(struct comp_dev *dev, int chan, uint32_t vol)
 	 * multiplication overflow with the 32 bit value. Non-zero MIN option
 	 * can be useful to prevent totally muted small volume gain.
 	 */
+
+	trace_volume("@@@ VOL %d %u", chan, vol);
+
 	if (v <= cd->min_volume)
 		v = cd->min_volume;
 
@@ -312,6 +315,7 @@ static int volume_ctrl_set_cmd(struct comp_dev *dev,
 	struct comp_data *cd = comp_get_drvdata(dev);
 	int i;
 	int j;
+	static uint32_t foobar[4] = { 0 };
 
 	/* validate */
 	if (cdata->num_elems == 0 || cdata->num_elems > SOF_IPC_MAX_CHANNELS) {
@@ -365,6 +369,27 @@ static int volume_ctrl_set_cmd(struct comp_dev *dev,
 			}
 		}
 		work_schedule_default(&cd->volwork, VOL_RAMP_US);
+		break;
+
+	case SOF_CTRL_CMD_BINARY:
+		trace_volume("volume_ctrl_set_cmd(), SOF_CTRL_CMD_SWITCH, "
+			     "cdata->comp_id = %u", cdata->comp_id);
+
+		uint32_t *stuff = (uint32_t *)cdata->data->data;
+
+		trace_volume("@@@@ WTF %u %u", stuff[0], stuff[1]);
+
+		if (cdata->msg_idx == 0) memcpy(foobar, cdata->data->data, sizeof(uint32_t) * 2);
+		else if (cdata->msg_idx == 1)
+		{
+			memcpy(&foobar[2], cdata->data->data, sizeof(uint32_t) * 2);
+			volume_set_chan(dev, 0, foobar[0]);
+			volume_set_chan(dev, 1, foobar[1]);
+			volume_set_chan(dev, 2, foobar[2]);
+			volume_set_chan(dev, 3, foobar[3]);
+			work_schedule_default(&cd->volwork, VOL_RAMP_US);
+		}
+
 		break;
 
 	default:
@@ -434,6 +459,7 @@ static int volume_cmd(struct comp_dev *dev, int cmd, void *data,
 
 	switch (cmd) {
 	case COMP_CMD_SET_VALUE:
+	case COMP_CMD_SET_DATA:
 		return volume_ctrl_set_cmd(dev, cdata);
 	case COMP_CMD_GET_VALUE:
 		return volume_ctrl_get_cmd(dev, cdata, max_data_size);
