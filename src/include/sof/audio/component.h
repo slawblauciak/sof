@@ -213,7 +213,7 @@ struct comp_driver {
 	struct comp_ops ops;	/**< component operations */
 
 	struct list_item list;	/**< list of component drivers */
-};	
+};
 
 /**
  * Audio component base device "class"
@@ -512,7 +512,11 @@ static inline void sys_comp_src_init(void) {}
 void sys_comp_tone_init(void);
 void sys_comp_eq_iir_init(void);
 void sys_comp_eq_fir_init(void);
+#ifdef CONFIG_COMP_KEYPHRASE_TEST
 void sys_comp_keyword_init(void);
+#else
+static inline void sys_comp_keyword_init(void) {}
+#endif
 
 /** @}*/
 

@@ -12,4 +12,10 @@ config COMP_SRC
 	help
 	  Select for SRC component
 
+config COMP_KEYPHRASE_TEST
+	bool "KEYPHRASE_TEST component"
+	default y
+	help
+	  Select for KEYPHRASE_TEST component
+
 endmenu

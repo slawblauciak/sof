@@ -9,7 +9,6 @@ if(NOT BUILD_HOST)
 		tone.c
 		mixer.c
 		mux.c
-		detect_test.c
 		switch.c
 		dai.c
 		host.c
@@ -31,6 +30,11 @@ if(NOT BUILD_HOST)
 			src_generic.c
 			src_hifi2ep.c
 			src_hifi3.c
+		)
+	endif()
+	if(CONFIG_COMP_KEYPHRASE_TEST)
+		add_local_sources(sof
+			detect_test.c
 		)
 	endif()
 	return()
