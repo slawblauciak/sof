@@ -57,7 +57,8 @@ struct comp_data {
 
 	struct sof_detect_test_config *config;
 	void *load_memory;	/**< synthetic memory load */
-	int32_t *prev_samples;	/**< last samples from previous period */
+	int32_t prev_sample;	/**< last samples from previous period */
+	uint32_t listening;
 
 	void (*detect_func)(struct comp_dev *dev, struct comp_buffer *sink,
 			    struct comp_buffer *source, uint32_t frames);
@@ -82,39 +83,34 @@ static void default_detect_test(struct comp_dev *dev, struct comp_buffer *sink,
 
 	int32_t *src = source->r_ptr;
 	int32_t *dest = sink->w_ptr;
-	uint32_t count = frames * dev->params.channels;
+	uint32_t count = frames; /**< Assmuming single channel */
 	uint32_t sample;
-	int notified = 0;
 
 	/* synthetic load */
 	if (cd->config)
 		idelay(cd->config->load_mips * 1000000);
 
-	/* compare with samples from previous period */
-	for (sample = 0; sample < dev->params.channels; ++sample) {
-		if (abs(cd->prev_samples[sample] - src[sample]) >=
-		    DETECT_TEST_SPIKE_THRESHOLD) {
-			detect_test_notify(dev);
-			notified = 1;
-		}
+	/* compare with the last sample from previous period */
+	if (cd->listening && abs(cd->prev_sample - src[0]) >=
+	    DETECT_TEST_SPIKE_THRESHOLD) {
+		detect_test_notify(dev);
+		cd->listening = 0;
 	}
 
 	/* copy the samples and perform detection within current period */
 	for (sample = 0; sample < count; ++sample) {
 		dest[sample] = src[sample];
 
-		if (!notified && sample >= dev->params.channels &&
-		    abs(src[sample - dev->params.channels] - src[sample]) >=
+		if (cd->listening && sample > 0 &&
+		    abs(src[sample - 1] - src[sample]) >=
 		    DETECT_TEST_SPIKE_THRESHOLD) {
 			detect_test_notify(dev);
-			notified = 1;
+			cd->listening = 0;
 		}
 	}
 
-	/* remember last samples from the current period */
-	for (sample = 0; sample < dev->params.channels; ++sample)
-		cd->prev_samples[sample] = src[(count - dev->params.channels) +
-					       sample];
+	/* remember last sample from the current period */
+	cd->prev_sample = src[count - 1];
 }
 
 static int free_mem_load(struct comp_data *cd)
@@ -161,12 +157,6 @@ static void detect_test_free_parameters(struct comp_data *cd)
 	cd->config = NULL;
 }
 
-static void detect_test_free_buffers(struct comp_data *cd)
-{
-	rfree(cd->prev_samples);
-	cd->prev_samples = NULL;
-}
-
 static struct comp_dev *keyword_new(struct sof_ipc_comp *comp)
 {
 	struct comp_dev *dev;
@@ -209,7 +199,6 @@ static void keyword_free(struct comp_dev *dev)
 	trace_keyword("keyword_free()");
 
 	detect_test_free_parameters(cd);
-	detect_test_free_buffers(cd);
 	free_mem_load(cd);
 	rfree(cd);
 	rfree(dev);
@@ -426,9 +415,23 @@ static int keyword_cmd(struct comp_dev *dev, int cmd, void *data,
 
 static int keyword_trigger(struct comp_dev *dev, int cmd)
 {
+	int ret;
+	struct comp_data *cd = comp_get_drvdata(dev);
+
 	trace_keyword("keyword_trigger()");
 
-	return comp_set_state(dev, cmd);
+	ret = comp_set_state(dev, cmd);
+	if (ret)
+		return ret;
+
+	switch (cmd) {
+	case COMP_TRIGGER_START:
+	case COMP_TRIGGER_RELEASE:
+		cd->listening = 1;
+		break;
+	}
+
+	return ret;
 }
 
 /* copy and process stream data from source to sink buffers */
@@ -504,16 +507,6 @@ static int keyword_prepare(struct comp_dev *dev)
 			goto err;
 	}
 
-	detect_test_free_buffers(cd);
-	cd->prev_samples = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM,
-				   sizeof(int32_t) * dev->params.channels);
-
-	if (!cd->prev_samples) {
-		trace_keyword("keyword_prepare() error: "
-			      "failed to allocate sample buffer");
-		goto err;
-	}
-
 	/* keyword components will only ever have 1 source and 1 sink buffer */
 	sourceb = list_first_item(&dev->bsource_list,
 				  struct comp_buffer, sink_list);
@@ -557,6 +550,12 @@ static int keyword_prepare(struct comp_dev *dev)
 				   "dev->frames = %u, "
 				   "sourceb->source->frame_bytes = %u",
 				   dev->frames, sourceb->source->frame_bytes);
+		ret = -EINVAL;
+		goto err;
+	}
+	if (dev->params.channels != 1) {
+		trace_keyword_error("keyword_prepare() error: "
+				    "only single channel supported");
 		ret = -EINVAL;
 		goto err;
 	}

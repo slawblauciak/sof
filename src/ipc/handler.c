@@ -444,8 +444,6 @@ int ipc_send_comp_notification(struct comp_dev *cdev,
 	event->src_comp_type = cdev->comp.type;
 	event->src_comp_id = cdev->comp.id;
 
-	mailbox_stream_write(cdev->pipeline->posn_offset, event,
-			     sizeof(*event));
 	return ipc_queue_host_message(_ipc, event->rhdr.hdr.cmd, event,
 				      sizeof(*event), 0);
 }
