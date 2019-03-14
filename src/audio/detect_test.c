@@ -45,7 +45,8 @@
 #define tracev_keyword(__e, ...) \
 	tracev_event(TRACE_CLASS_KEYWORD, __e, ##__VA_ARGS__)
 
-#define DETECT_TEST_SPIKE_THRESHOLD 0x00FFFFFF
+#define ACTIVATION_SHIFT 6
+#define DETECT_TEST_THRESHOLD 0x4FFFFFFF
 
 struct comp_data {
 	enum sof_ipc_frame source_format;	/**< source frame format */
@@ -53,7 +54,7 @@ struct comp_data {
 
 	struct sof_detect_test_config *config;
 	void *load_memory;	/**< synthetic memory load */
-	int32_t prev_sample;	/**< last samples from previous period */
+	int32_t activation;
 	uint32_t detected;
 
 	void (*detect_func)(struct comp_dev *dev,
@@ -85,25 +86,23 @@ static void default_detect_test(struct comp_dev *dev,
 	if (cd->config)
 		idelay(cd->config->load_mips * 1000000);
 
-	/* compare with the last sample from previous period */
-	if (!cd->detected && abs(cd->prev_sample - src[0]) >=
-	    DETECT_TEST_SPIKE_THRESHOLD) {
+	/* perform detection within current period */
+	for (sample = 1; sample < count; ++sample) {
+		int32_t prev_act = cd->activation;
+
+		cd->activation += (abs(src[sample]) - cd->activation) >>
+				  ACTIVATION_SHIFT;
+
+		if (prev_act < DETECT_TEST_THRESHOLD &&
+		    cd->activation >= DETECT_TEST_THRESHOLD)
+			trace_keyword_error("@@@@@@@@ s 0x%X act 0x%X",
+					    src[sample], cd->activation);
+	}
+
+	if (!cd->detected && cd->activation >= DETECT_TEST_THRESHOLD) {
 		detect_test_notify(dev);
 		cd->detected = 1;
 	}
-
-	/* perform detection within current period */
-	for (sample = 1; sample < count; ++sample) {
-		if (!cd->detected &&
-		    abs(src[sample - 1] - src[sample]) >=
-		    DETECT_TEST_SPIKE_THRESHOLD) {
-			detect_test_notify(dev);
-			cd->detected = 1;
-		}
-	}
-
-	/* remember last sample from the current period */
-	cd->prev_sample = src[count - 1];
 }
 
 static int free_mem_load(struct comp_data *cd)
@@ -365,6 +364,7 @@ static int test_keyword_trigger(struct comp_dev *dev, int cmd)
 	case COMP_TRIGGER_START:
 	case COMP_TRIGGER_RELEASE:
 		cd->detected = 0;
+		cd->activation = 0;
 		break;
 	}
 
