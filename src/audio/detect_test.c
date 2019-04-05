@@ -555,11 +555,18 @@ static int test_keyword_trigger(struct comp_dev *dev, int cmd)
 	if (ret)
 		return ret;
 
-	if (cmd == COMP_TRIGGER_START ||
-	    cmd == COMP_TRIGGER_RELEASE) {
+	switch (cmd) {
+	case COMP_TRIGGER_START:
+	case COMP_TRIGGER_RELEASE:
 		cd->detect_preamble = 0;
 		cd->detected = 0;
 		cd->activation = 0;
+		break;
+
+	case COMP_TRIGGER_STOP:
+		trace_keyword("test_keyword_trigger() stop: activation %d",
+			      cd->activation);
+		break;
 	}
 
 	return ret;
