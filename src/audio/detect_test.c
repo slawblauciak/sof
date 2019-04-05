@@ -47,22 +47,17 @@
 #define tracev_keyword(__e, ...) \
 	tracev_event(TRACE_CLASS_KEYWORD, __e, ##__VA_ARGS__)
 
-/* TODO: too high threshold for DMIC */
-//#define ACTIVATION_SHIFT 6
-//#define ACTIVATION_THRESHOLD 0.7
-#define ACTIVATION_SHIFT 3
-#define ACTIVATION_THRESHOLD 0.5
+#define ACTIVATION_DEFAULT_SHIFT 3
+#define ACTIVATION_DEFAULT_THRESHOLD 0.5
 
-#define ACTIVATION_THRESHOLD_S16 \
-	((int16_t)((INT16_MAX) * (ACTIVATION_THRESHOLD)))
+#define ACTIVATION_DEFAULT_THRESHOLD_S16 \
+	((int16_t)((INT16_MAX) * (ACTIVATION_DEFAULT_THRESHOLD)))
 
 /* number of samples to be treated as a full keyphrase */
 #define KEYPHRASE_DEFAULT_PREAMBLE_LENGTH (30 * 1024)
 
 struct comp_data {
-	uint32_t period_bytes;		/**< source number of period bytes */
-
-	struct sof_detect_test_config *config;
+	struct sof_detect_test_config config;
 	void *load_memory;	/**< synthetic memory load */
 	int16_t activation;
 	uint32_t detected;
@@ -90,20 +85,20 @@ static void notify_host(struct comp_dev *dev)
 	ipc_send_comp_notification(dev, &event);
 }
 
-static void notify_kbd(struct comp_dev *dev)
+static void notify_kpb(struct comp_dev *dev)
 {
 	struct comp_data *cd = comp_get_drvdata(dev);
 
-	trace_keyword("notify_kbd(), preamble: %u", cd->detect_preamble);
+	trace_keyword("notify_kpb(), preamble: %u", cd->detect_preamble);
 
 	cd->client_data.r_ptr = NULL;
 	cd->client_data.sink = NULL;
 	cd->client_data.id = 0; /**< TODO: acquire proper id from kpb */
 	cd->client_data.history_end = 0; /**< keyphrase end, 0 is now */
 	cd->client_data.history_begin = cd->detect_preamble;
-	/* two channels */
-	cd->client_data.history_depth = cd->detect_preamble *
-		sizeof(int16_t) * 2;
+	/* time in milliseconds */
+	cd->client_data.history_depth = cd->detect_preamble /
+					(dev->params.rate / 1000);
 
 	cd->event_data.event_id = KPB_EVENT_BEGIN_DRAINING;
 	cd->event_data.client_data = &cd->client_data;
@@ -118,7 +113,7 @@ static void notify_kbd(struct comp_dev *dev)
 static void detect_test_notify(struct comp_dev *dev)
 {
 	notify_host(dev);
-	notify_kbd(dev);
+	notify_kpb(dev);
 }
 
 static void default_detect_test(struct comp_dev *dev,
@@ -126,21 +121,23 @@ static void default_detect_test(struct comp_dev *dev,
 {
 	struct comp_data *cd = comp_get_drvdata(dev);
 
-	int16_t *src = source->r_ptr;
-	uint32_t count = frames; /**< Assmuming single channel */
+	int16_t *src;
+	uint32_t count = frames; /**< Assuming single channel */
 	uint32_t sample;
 
 	/* synthetic load */
-	if (cd->config && cd->config->load_mips)
-		idelay(cd->config->load_mips * 1000000);
+	if (cd->config.load_mips)
+		idelay(cd->config.load_mips * 1000000);
 
 	/* perform detection within current period */
 	for (sample = 0; sample < count && !cd->detected; ++sample) {
-		cd->activation += (abs(src[sample]) - cd->activation) >>
-				  ACTIVATION_SHIFT;
+		src = buffer_read_frag_s16(source, sample);
+
+		cd->activation += (abs(*src) - cd->activation) >>
+				  cd->config.activation_shift;
 
 		if (cd->detect_preamble >= cd->keyphrase_samples) {
-			if (cd->activation >= ACTIVATION_THRESHOLD_S16) {
+			if (cd->activation >= cd->config.activation_threshold) {
 				detect_test_notify(dev);
 				cd->detected = 1;
 			}
@@ -150,19 +147,17 @@ static void default_detect_test(struct comp_dev *dev,
 	}
 }
 
-static int free_mem_load(struct comp_data *cd)
+static void free_mem_load(struct comp_data *cd)
 {
 	if (!cd) {
 		trace_keyword_error("free_mem_load() error: invalid cd");
-		return -EINVAL;
+		return;
 	}
 
 	if (cd->load_memory) {
 		rfree(cd->load_memory);
 		cd->load_memory = NULL;
 	}
-
-	return 0;
 }
 
 static int alloc_mem_load(struct comp_data *cd, uint32_t size)
@@ -190,10 +185,15 @@ static int alloc_mem_load(struct comp_data *cd, uint32_t size)
 	return 0;
 }
 
-static void detect_test_free_parameters(struct comp_data *cd)
+static void test_keyword_set_default_config(struct comp_dev *dev)
 {
-	rfree(cd->config);
-	cd->config = NULL;
+	struct comp_data *cd = comp_get_drvdata(dev);
+
+	memset(&cd->config, 0, sizeof(cd->config));
+
+	cd->keyphrase_samples = KEYPHRASE_DEFAULT_PREAMBLE_LENGTH;
+	cd->config.activation_shift = ACTIVATION_DEFAULT_SHIFT;
+	cd->config.activation_threshold = ACTIVATION_DEFAULT_THRESHOLD_S16;
 }
 
 static struct comp_dev *test_keyword_new(struct sof_ipc_comp *comp)
@@ -217,7 +217,8 @@ static struct comp_dev *test_keyword_new(struct sof_ipc_comp *comp)
 		return NULL;
 
 	keyword = (struct sof_ipc_comp_process *)&dev->comp;
-	memcpy(keyword, ipc_keyword, sizeof(struct sof_ipc_comp_process));
+	memcpy_s(keyword, sizeof(*keyword), ipc_keyword,
+		 sizeof(struct sof_ipc_comp_process));
 
 	cd = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM, sizeof(*cd));
 
@@ -228,6 +229,8 @@ static struct comp_dev *test_keyword_new(struct sof_ipc_comp *comp)
 
 	/* using default processing function */
 	cd->detect_func = default_detect_test;
+
+	test_keyword_set_default_config(dev);
 
 	comp_set_drvdata(dev, cd);
 	dev->state = COMP_STATE_READY;
@@ -240,7 +243,6 @@ static void test_keyword_free(struct comp_dev *dev)
 
 	trace_keyword("test_keyword_free()");
 
-	detect_test_free_parameters(cd);
 	free_mem_load(cd);
 	rfree(cd);
 	rfree(dev);
@@ -268,10 +270,19 @@ static int test_keyword_params(struct comp_dev *dev)
 
 	dev->frame_bytes = comp_frame_bytes(dev);
 
-	/* calculate period size based on config */
-	cd->period_bytes = dev->frames * dev->frame_bytes;
+	/* calculate the length of the preamble */
+	if (cd->config.keyphrase_length) {
+		if (cd->config.keyphrase_length > KPB_MAX_BUFF_TIME) {
+			trace_keyword_error("test_keyword_params() "
+					    "error: kp length too long");
+			return -EINVAL;
+		}
 
-	cd->keyphrase_samples = KEYPHRASE_DEFAULT_PREAMBLE_LENGTH;
+		cd->keyphrase_samples = cd->config.keyphrase_length *
+					(dev->params.rate / 1000);
+	} else {
+		cd->keyphrase_samples = KEYPHRASE_DEFAULT_PREAMBLE_LENGTH;
+	}
 
 	return 0;
 }
@@ -282,9 +293,6 @@ static int test_keyword_set_config(struct comp_dev *dev,
 	struct comp_data *cd = comp_get_drvdata(dev);
 	struct sof_detect_test_config *cfg;
 	size_t bs;
-	int ret = 0;
-
-	detect_test_free_parameters(cd);
 
 	/* Copy new config, find size from header */
 	cfg = (struct sof_detect_test_config *)cdata->data->data;
@@ -299,54 +307,22 @@ static int test_keyword_set_config(struct comp_dev *dev,
 		return -EINVAL;
 	}
 
-	/* Allocate and make a copy of the blob
-	 * and setup the configuration
-	 */
-	cd->config = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM, bs);
-	if (!cd->config) {
-		trace_keyword_error("test_keyword_set_config() "
-				    "error: alloc failed");
-		return -EINVAL;
-	}
+	memcpy_s(&cd->config, sizeof(cd->config), cdata->data->data, bs);
 
-	memcpy(cd->config, cdata->data->data, bs);
+	if (!cd->config.activation_shift)
+		cd->config.activation_shift = ACTIVATION_DEFAULT_SHIFT;
 
-	if (!cd->config->keyphrase_length) {
-		trace_keyword_error("test_keyword_set_config() "
-				    "error: invalid keyphrase length");
+	if (!cd->config.activation_threshold)
+		cd->config.activation_threshold =
+			ACTIVATION_DEFAULT_THRESHOLD_S16;
 
-		ret = -EINVAL;
-		goto err;
-	}
-
-	/* calculate the length of the preamble */
-	cd->keyphrase_samples = cd->config->keyphrase_length *
-				(dev->params.rate / 10000);
-
-	ret = alloc_mem_load(cd, cd->config->load_memory_size);
-	if (ret)
-		goto err;
-
-	return ret;
-
-err:
-	rfree(cd->config);
-	cd->config = NULL;
-
-	return ret;
+	return alloc_mem_load(cd, cd->config.load_memory_size);
 }
 
 static int test_keyword_set_model(struct comp_dev *dev,
 				  struct sof_ipc_ctrl_data *cdata)
 {
 	struct comp_data *cd = comp_get_drvdata(dev);
-
-	if (!cd->config) {
-		trace_keyword_error("keyword_ctrl_set_model() error: "
-				   "unable to create model without "
-				   "previous configuration");
-		return -EINVAL;
-	}
 
 	if (!cd->load_memory) {
 		trace_keyword_error("keyword_ctrl_set_model() error: "
@@ -356,7 +332,7 @@ static int test_keyword_set_model(struct comp_dev *dev,
 
 	if (!cdata->elems_remaining) {
 		if (cdata->data->size + cd->buf_copy_pos <
-		    cd->config->load_memory_size) {
+		    cd->config.load_memory_size) {
 			trace_keyword_error("keyword_ctrl_set_model() error: "
 					   "not enough data to fill the buffer");
 
@@ -370,14 +346,16 @@ static int test_keyword_set_model(struct comp_dev *dev,
 	}
 
 	if (cdata->data->size >
-	    cd->config->load_memory_size - cd->buf_copy_pos) {
+	    cd->config.load_memory_size - cd->buf_copy_pos) {
 		trace_keyword_error("keyword_ctrl_set_model() error: "
 				   "too much data");
 		return -EINVAL;
 	}
 
-	memcpy(cd->load_memory + cd->buf_copy_pos, cdata->data->data,
-	       cdata->data->size);
+	memcpy_s(cd->load_memory + cd->buf_copy_pos,
+		 cd->config.load_memory_size - cd->buf_copy_pos,
+		 cdata->data->data, cdata->data->size);
+
 	cd->buf_copy_pos += cdata->data->size;
 
 	return 0;
@@ -410,6 +388,7 @@ static int test_keyword_ctrl_set_bin_data(struct comp_dev *dev,
 	default:
 		trace_keyword_error("keyword_ctrl_set_bin_data() error: "
 				   "unknown binary data type");
+		break;
 	}
 
 	return ret;
@@ -456,21 +435,15 @@ static int test_keyword_get_config(struct comp_dev *dev,
 	trace_keyword("test_keyword_get_config()");
 
 	/* Copy back to user space */
-	if (cd->config) {
-		bs = cd->config->size;
-		trace_value(bs);
+	bs = cd->config.size;
+	trace_value(bs);
 
-		if (bs == 0 || bs > size)
-			return -EINVAL;
+	if (bs == 0 || bs > size)
+		return -EINVAL;
 
-		memcpy(cdata->data->data, cd->config, bs);
-		cdata->data->abi = SOF_ABI_VERSION;
-		cdata->data->size = bs;
-	} else {
-		trace_keyword_error("test_keyword_get_config() "
-				    "error: invalid cd->config");
-		ret = -EINVAL;
-	}
+	memcpy_s(cdata->data->data, size, &cd->config, bs);
+	cdata->data->abi = SOF_ABI_VERSION;
+	cdata->data->size = bs;
 
 	return ret;
 }
@@ -480,12 +453,13 @@ static int test_keyword_get_model(struct comp_dev *dev,
 {
 	struct comp_data *cd = comp_get_drvdata(dev);
 	size_t bs;
+	uint32_t crc;
 	int ret = 0;
 
 	trace_keyword("test_keyword_get_model()");
 
 	/* Copy back to user space */
-	if (cd->config && cd->load_memory) {
+	if (cd->load_memory) {
 		bs = sizeof(uint32_t);
 
 		if (bs > size) {
@@ -494,12 +468,11 @@ static int test_keyword_get_model(struct comp_dev *dev,
 			return -EINVAL;
 		}
 
-		uint32_t crc = crc32(cd->load_memory,
-				     cd->config->load_memory_size);
+		crc = crc32(cd->load_memory, cd->config.load_memory_size);
 
 		trace_keyword("test_keyword_get_model() crc: 0x%X", crc);
 
-		memcpy(cdata->data->data, &crc, bs);
+		memcpy_s(cdata->data->data, size, &crc, bs);
 		cdata->data->abi = SOF_ABI_VERSION;
 		cdata->data->size = bs;
 	} else {
@@ -527,6 +500,7 @@ static int test_keyword_ctrl_get_bin_data(struct comp_dev *dev,
 	default:
 		trace_keyword_error("test_keyword_ctrl_get_bin_data() error: "
 				   "unknown binary data type");
+		break;
 	}
 
 	return ret;
@@ -581,13 +555,11 @@ static int test_keyword_trigger(struct comp_dev *dev, int cmd)
 	if (ret)
 		return ret;
 
-	switch (cmd) {
-	case COMP_TRIGGER_START:
-	case COMP_TRIGGER_RELEASE:
+	if (cmd == COMP_TRIGGER_START ||
+	    cmd == COMP_TRIGGER_RELEASE) {
 		cd->detect_preamble = 0;
 		cd->detected = 0;
 		cd->activation = 0;
-		break;
 	}
 
 	return ret;
@@ -608,21 +580,22 @@ static int test_keyword_copy(struct comp_dev *dev)
 	/* make sure source component buffer has enough data available for copy
 	 * Also check for XRUNs
 	 */
-	if (source->avail < cd->period_bytes) {
+	if (!source->avail) {
 		trace_keyword_error("test_keyword_copy() error: "
 				   "source component buffer"
 				   " has not enough data available");
-		comp_underrun(dev, source, cd->period_bytes, 0);
+		comp_underrun(dev, source, 1, 0);
 		return -EIO;	/* xrun */
 	}
 
 	/* copy and perform detection */
-	cd->detect_func(dev, source, dev->frames);
+	cd->detect_func(dev, source,
+			source->avail / comp_frame_bytes(source->source));
 
 	/* calc new available */
-	comp_update_buffer_consume(source, cd->period_bytes);
+	comp_update_buffer_consume(source, source->avail);
 
-	return dev->frames;
+	return 0;
 }
 
 static int test_keyword_reset(struct comp_dev *dev)
@@ -679,9 +652,7 @@ struct comp_driver comp_keyword = {
 	},
 };
 
-void sys_comp_keyword_init(void);
-
-void sys_comp_keyword_init(void)
+static void sys_comp_keyword_init(void)
 {
 	comp_register(&comp_keyword);
 }
