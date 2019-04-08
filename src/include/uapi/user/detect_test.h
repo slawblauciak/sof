@@ -49,7 +49,7 @@ struct sof_detect_test_config {
 	uint16_t activation_shift;
 
 	/** activation threshold */
-	uint16_t activation_threshold;
+	int16_t activation_threshold;
 
 	/** reserved for future use */
 	uint32_t reserved[3];
