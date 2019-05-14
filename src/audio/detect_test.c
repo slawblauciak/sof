@@ -141,10 +141,10 @@ static void default_detect_test(struct comp_dev *dev,
 		cd->activation += !step ? diff : step;
 
 		if (cd->detect_preamble >= cd->keyphrase_samples) {
-			if (cd->activation >= cd->config.activation_threshold) {
+			//if (cd->activation >= cd->config.activation_threshold) {
 				detect_test_notify(dev);
 				cd->detected = 1;
-			}
+			//}
 		} else {
 			++cd->detect_preamble;
 		}
