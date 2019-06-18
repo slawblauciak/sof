@@ -257,6 +257,18 @@ static void test_keyword_free(struct comp_dev *dev)
 	rfree(dev);
 }
 
+static void test_keyword_calc_preamble(struct comp_dev *dev)
+{
+	struct comp_data *cd = comp_get_drvdata(dev);
+
+	if (cd->config && cd->config->preamble_time) {
+		cd->keyphrase_samples = cd->config->preamble_time *
+					(dev->params.rate / 1000);
+	} else {
+		cd->keyphrase_samples = KEYPHRASE_DEFAULT_PREAMBLE_LENGTH;
+	}
+}
+
 /* set component audio stream parameters */
 static int test_keyword_params(struct comp_dev *dev)
 {
@@ -278,14 +290,34 @@ static int test_keyword_params(struct comp_dev *dev)
 	}
 
 	/* calculate the length of the preamble */
-	if (cd->config->preamble_time) {
-		cd->keyphrase_samples = cd->config->preamble_time *
-					(dev->params.rate / 1000);
-	} else {
-		cd->keyphrase_samples = KEYPHRASE_DEFAULT_PREAMBLE_LENGTH;
-	}
+	test_keyword_calc_preamble(dev);
 
 	return 0;
+}
+
+static void test_keyword_dump_config(struct comp_dev *dev)
+{
+	struct comp_data *cd = comp_get_drvdata(dev);
+
+	if (!cd->config) {
+		trace_keyword("test_keyword_dump_config(): no config");
+		return;
+	}
+
+	trace_keyword("test_keyword_dump_config(): size %u",
+		      cd->config->size);
+	trace_keyword("test_keyword_dump_config(): load_mips %u",
+		      cd->config->load_mips);
+	trace_keyword("test_keyword_dump_config(): model_size %u",
+		      cd->config->model_size);
+	trace_keyword("test_keyword_dump_config(): preamble_time %u",
+		      cd->config->preamble_time);
+	trace_keyword("test_keyword_dump_config(): activation_shift %u",
+		      cd->config->activation_shift);
+	trace_keyword("test_keyword_dump_config(): activation_threshold %d",
+		      cd->config->activation_threshold);
+	trace_keyword("test_keyword_dump_config(): history_depth %u",
+		      cd->config->history_depth);
 }
 
 static int test_keyword_set_config(struct comp_dev *dev,
@@ -316,9 +348,6 @@ static int test_keyword_set_config(struct comp_dev *dev,
 
 			return -EINVAL;
 		}
-
-		/* fallback to defaults if we have unset values */
-		test_keyword_check_defconfig(dev);
 	} else {
 		dst_size = cd->config->size;
 		if (!cdata->elems_remaining) {
@@ -340,6 +369,12 @@ static int test_keyword_set_config(struct comp_dev *dev,
 
 			trace_keyword("test_keyword_set_config() "
 				      "final packet received");
+
+			/* fallback to defaults if we have unset values */
+			test_keyword_check_defconfig(dev);
+
+			test_keyword_dump_config(dev);
+			test_keyword_calc_preamble(dev);
 		}
 	}
 
@@ -405,7 +440,7 @@ static int test_keyword_get_config(struct comp_dev *dev,
 		(struct sof_detect_test_config *)cdata->data->data;
 	uint32_t crc = crc32(cd->config->model, cd->config->model_size);
 
-	assert(!memcpy_s(cfg, size, &cd->config, bs));
+	assert(!memcpy_s(cfg, size, cd->config, bs));
 	cfg->model[0] = crc;
 
 	/* bs (config size) + uint32_t for crc */
