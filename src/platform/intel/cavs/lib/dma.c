@@ -11,6 +11,7 @@
 #include <sof/drivers/dw-dma.h>
 #include <sof/drivers/hda-dma.h>
 #include <sof/drivers/interrupt.h>
+#include <sof/drivers/multidma.h>
 #include <sof/lib/dma.h>
 #include <sof/lib/memory.h>
 #include <sof/spinlock.h>
@@ -150,6 +151,20 @@ struct dma dma[PLATFORM_NUM_DMACS] = {
 	},
 	.ops		= &dw_dma_ops,
 },
+{
+	.plat_data = {
+		.id		= 0,
+		.dir		= DMA_DIR_MEM_TO_DEV | DMA_DIR_DEV_TO_MEM,
+		.caps		= DMA_CAP_MULTI,
+		.devs		= DMA_DEV_MULTI,
+		.base		= 0,
+		.channels	= MULTIDMA_MAX_CHANS,
+		.irq		= 0,
+		.irq_name	= NULL,
+		.drv_plat_data	= NULL,
+	},
+	.ops		= &multidma_ops,
+},
 };
 
 #else
@@ -233,7 +248,22 @@ struct dma dma[PLATFORM_NUM_DMACS] = {
 		.chan_size	= GTW_LINK_OUT_STREAM_SIZE,
 	},
 	.ops		= &hda_link_dma_ops,
-},};
+},
+{
+	.plat_data = {
+		.id		= 0,
+		.dir		= DMA_DIR_MEM_TO_DEV | DMA_DIR_DEV_TO_MEM,
+		.caps		= DMA_CAP_MULTI,
+		.devs		= DMA_DEV_MULTI,
+		.base		= 0,
+		.channels	= MULTIDMA_MAX_CHANS,
+		.irq		= 0,
+		.irq_name	= NULL,
+		.drv_plat_data	= NULL,
+	},
+	.ops		= &multidma_ops,
+},
+};
 #endif
 
 /* Initialize all platform DMAC's */

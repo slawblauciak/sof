@@ -5,6 +5,8 @@ add_local_sources(sof
 	hda.c
 	interrupt.c
 	timer.c
+	multidai.c
+	multidma.c
 )
 
 if(CONFIG_INTEL_IOMUX)

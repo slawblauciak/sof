@@ -208,6 +208,9 @@ static void dai_free(struct comp_dev *dev)
 	if (dd->chan)
 		dma_channel_put(dd->chan);
 
+	if (dd->config.multi.stream_map)
+		rfree(dd->config.multi.stream_map);
+
 	dma_put(dd->dma);
 
 	dai_put(dd->dai);
@@ -473,6 +476,12 @@ static int dai_prepare(struct comp_dev *dev)
 		return ret;
 	}
 
+	/* Temporary hack */
+	if (dai_get_info(dd->dai, DAI_INFO_TYPE) == SOF_DAI_MULTIDAI) {
+		dai_get_dma_info(dd->dai, dev->params.direction,
+				 &dd->config.multi.dma_info);
+	}
+
 	ret = dma_set_config(dd->chan, &dd->config);
 	if (ret < 0)
 		comp_set_state(dev, COMP_TRIGGER_RESET);
@@ -676,6 +685,7 @@ static int dai_config(struct comp_dev *dev, struct sof_ipc_dai_config *config)
 	struct sof_ipc_comp_config *dconfig = COMP_GET_CONFIG(dev);
 	struct dai_data *dd = comp_get_drvdata(dev);
 	struct sof_ipc_comp_dai *dai = (struct sof_ipc_comp_dai *)&dev->comp;
+	const struct dai_driver *child_dai_driver;
 	int channel = 0;
 	int i;
 	int handshake;
@@ -842,6 +852,40 @@ static int dai_config(struct comp_dev *dev, struct sof_ipc_dai_config *config)
 
 		dd->config.burst_elems =
 			dd->dai->plat_data.fifo[dai->direction].depth;
+		break;
+	case SOF_DAI_MULTIDAI:
+		/* set to some non-zero value to satisfy the condition below,
+		 * it is recalculated in dai_params() later
+		 */
+		dd->frame_bytes = 4;
+
+		dd->config.multi.ch_bytes = config->multi.channel_bytes;
+		child_dai_driver = dai_get_driver(config->multi.dai_type);
+
+		if (!child_dai_driver) {
+			trace_dai_error_with_ids(dev, "dai_config() error: "
+						 "no driver found for type %u",
+						config->multi.dai_type);
+			return -EINVAL;
+		}
+
+		dd->config.multi.dma_caps = child_dai_driver->dma_caps;
+		dd->config.multi.dma_dev = child_dai_driver->dma_dev;
+
+		dd->config.multi.stream_map = rzalloc(RZONE_SYS_RUNTIME,
+			SOF_MEM_CAPS_RAM, config->multi.stream_map.hdr.size);
+
+		if (!dd->config.multi.stream_map) {
+			trace_dai_error_with_ids(dev, "dai_config() error: "
+						 "failed to alloc stream_map");
+			return -ENOMEM;
+		}
+
+		memcpy_s(dd->config.multi.stream_map,
+			 config->multi.stream_map.hdr.size,
+			 &config->multi.stream_map,
+			 config->multi.stream_map.hdr.size);
+
 		break;
 	default:
 		/* other types of DAIs not handled for now */

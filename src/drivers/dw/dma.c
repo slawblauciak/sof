@@ -117,12 +117,24 @@ static uint32_t dw_dma_interrupt_status(struct dma_chan_data *channel)
 	return status & DW_CHAN(channel->index);
 }
 
+extern int ___ptrdbg;
+uint32_t ___dwprevptr;
+
 static void dw_dma_increment_pointer(struct dw_dma_chan_data *chan, int bytes)
 {
 	chan->ptr_data.current_ptr += bytes;
 	if (chan->ptr_data.current_ptr >= chan->ptr_data.end_ptr)
 		chan->ptr_data.current_ptr = chan->ptr_data.start_ptr +
 			(chan->ptr_data.current_ptr - chan->ptr_data.end_ptr);
+
+	if (___ptrdbg)
+		trace_dwdma("DW PTR %d %d %d", ___dwprevptr,
+			    chan->ptr_data.current_ptr -
+			    chan->ptr_data.start_ptr,
+			    chan->ptr_data.current_ptr - ___dwprevptr);
+	else
+		___dwprevptr = chan->ptr_data.current_ptr -
+			chan->ptr_data.start_ptr;
 }
 
 /* allocate next free DMA channel */
@@ -306,6 +318,13 @@ static int dw_dma_release(struct dma_chan_data *channel)
 			dw_chan->ptr_data.current_ptr) +
 			(next_ptr - dw_chan->ptr_data.start_ptr);
 
+	if (___ptrdbg == 2)
+		trace_dwdma("PRE-REL DW PTR %d %d %d %d",
+			    dw_chan->ptr_data.current_ptr - dw_chan->ptr_data.start_ptr,
+			    next_ptr - dw_chan->ptr_data.start_ptr,
+			    next_ptr - dw_chan->ptr_data.current_ptr,
+			    bytes_left);
+
 	/* perform copy if callback exists */
 	if (channel->cb && channel->cb_type & DMA_CB_TYPE_COPY) {
 		next.elem.size = bytes_left;
@@ -464,7 +483,7 @@ static int dw_dma_set_config(struct dma_chan_data *channel,
 	int ret = 0;
 	int i;
 
-	tracev_dwdma("dw_dma_set_config(): dma %d channel %d config",
+	trace_dwdma("dw_dma_set_config(): dma %d channel %d config",
 		     channel->dma->plat_data.id, channel->index);
 
 	irq_local_disable(flags);
@@ -698,6 +717,7 @@ static int dw_dma_set_config(struct dma_chan_data *channel,
 						  sg_elem->size);
 
 		dw_chan->ptr_data.buffer_bytes += sg_elem->size;
+		trace_dwdma("@@@ BUF SIZE %d", dw_chan->ptr_data.buffer_bytes);
 
 		/* set next descriptor in list */
 		lli_desc->llp = (uint32_t)(lli_desc + 1);

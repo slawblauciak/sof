@@ -20,6 +20,7 @@
 #include <sof/bit.h>
 #include <sof/lib/io.h>
 #include <sof/spinlock.h>
+#include <sof/lib/dma.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -59,11 +60,15 @@ struct sof_ipc_dai_config;
  */
 struct dai_ops {
 	int (*set_config)(struct dai *dai, struct sof_ipc_dai_config *config);
+	int (*set_stream_map)(struct dai *dai,
+			      struct sof_ipc_stream_map *config);
 	int (*trigger)(struct dai *dai, int cmd, int direction);
 	int (*pm_context_restore)(struct dai *dai);
 	int (*pm_context_store)(struct dai *dai);
 	int (*get_handshake)(struct dai *dai, int direction, int stream_id);
 	int (*get_fifo)(struct dai *dai, int direction, int stream_id);
+	int (*get_dma_info)(struct dai *dai, int direction,
+			    struct dma_p_info *dma_info);
 	int (*probe)(struct dai *dai);
 	int (*remove)(struct dai *dai);
 };
@@ -129,6 +134,13 @@ struct dai_type_info {
  * \param[in] num_dai_types Number of elements in the dai_type_array.
  */
 void dai_install(struct dai_type_info *dai_type_array, size_t num_dai_types);
+
+/**
+ * \brief API to request a DAI driver.
+ *
+ * \param[in] type Type of requested DAI.
+ */
+const struct dai_driver *dai_get_driver(uint32_t type);
 
 /**
  * \brief API to request a platform DAI.
@@ -225,6 +237,31 @@ static inline int dai_remove(struct dai *dai)
 }
 
 /**
+ * \brief Digital Audio interface DMA info (handshakes and fifo)
+ */
+static inline int dai_get_dma_info(struct dai *dai, int direction,
+				   struct dma_p_info *dma_info)
+{
+	return dai->drv->ops.get_dma_info(dai, direction, dma_info);
+}
+
+static inline void dai_write(struct dai *dai, uint32_t reg, uint32_t value)
+{
+	io_reg_write(dai_base(dai) + reg, value);
+}
+
+static inline uint32_t dai_read(struct dai *dai, uint32_t reg)
+{
+	return io_reg_read(dai_base(dai) + reg);
+}
+
+static inline void dai_update_bits(struct dai *dai, uint32_t reg,
+				   uint32_t mask, uint32_t value)
+{
+	io_reg_update_bits(dai_base(dai) + reg, mask, value);
+}
+
+/**
  * \brief Get driver specific DAI information
  */
 static inline int dai_get_info(struct dai *dai, int info)
@@ -247,22 +284,6 @@ static inline int dai_get_info(struct dai *dai, int info)
 	}
 
 	return ret;
-}
-
-static inline void dai_write(struct dai *dai, uint32_t reg, uint32_t value)
-{
-	io_reg_write(dai_base(dai) + reg, value);
-}
-
-static inline uint32_t dai_read(struct dai *dai, uint32_t reg)
-{
-	return io_reg_read(dai_base(dai) + reg);
-}
-
-static inline void dai_update_bits(struct dai *dai, uint32_t reg,
-				   uint32_t mask, uint32_t value)
-{
-	io_reg_update_bits(dai_base(dai) + reg, mask, value);
 }
 
 /** @}*/

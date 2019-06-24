@@ -10,6 +10,7 @@
 #include <sof/common.h>
 #include <sof/drivers/hda.h>
 #include <sof/drivers/interrupt.h>
+#include <sof/drivers/multidai.h>
 #include <sof/lib/dai.h>
 #include <sof/lib/dma.h>
 #include <sof/lib/memory.h>
@@ -85,6 +86,7 @@ static struct dai alh[DAI_NUM_ALH_BI_DIR_LINKS];
 #endif
 
 static struct dai hda[(DAI_NUM_HDA_OUT + DAI_NUM_HDA_IN)];
+static struct dai multidai[DAI_NUM_MULTIDAI];
 
 static struct dai_type_info dti[] = {
 #if CONFIG_CAVS_SSP
@@ -111,8 +113,13 @@ static struct dai_type_info dti[] = {
 		.type = SOF_DAI_INTEL_ALH,
 		.dai_array = alh,
 		.num_dais = ARRAY_SIZE(alh)
-	}
+	},
 #endif
+	{
+		.type = SOF_DAI_MULTIDAI,
+		.dai_array = multidai,
+		.num_dais = ARRAY_SIZE(multidai)
+	}
 };
 
 int dai_init(void)
@@ -143,6 +150,13 @@ int dai_init(void)
 		hda[i].index = i;
 		hda[i].drv = &hda_driver;
 		spinlock_init(&hda[i].lock);
+	}
+
+	/* init multidai, TODO: abstract to virtual DAIs */
+	for (i = 0; i < ARRAY_SIZE(multidai); i++) {
+		multidai[i].index = i;
+		multidai[i].drv = &multidai_driver;
+		spinlock_init(&multidai[i].lock);
 	}
 
 #if (CONFIG_CAVS_DMIC)

@@ -13,7 +13,7 @@
 #define __PLATFORM_LIB_DMA_H__
 
 /* number of supported DMACs */
-#define PLATFORM_NUM_DMACS	6
+#define PLATFORM_NUM_DMACS	7
 
 /* max number of supported DMA channels */
 #define PLATFORM_MAX_DMA_CHAN	9

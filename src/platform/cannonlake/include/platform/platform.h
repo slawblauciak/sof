@@ -66,7 +66,7 @@ struct timer;
 #define DMA_FLUSH_TRACE_SIZE    (MAILBOX_TRACE_SIZE >> 2)
 
 /* the interval of DMA trace copying */
-#define DMA_TRACE_PERIOD		500000
+#define DMA_TRACE_PERIOD		50000
 
 /*
  * the interval of reschedule DMA trace copying in special case like half
