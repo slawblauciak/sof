@@ -42,6 +42,13 @@ static inline struct dai_type_info *dai_find_type(uint32_t type)
 	return NULL;
 }
 
+const struct dai_driver *dai_get_driver(uint32_t type)
+{
+	struct dai_type_info *dti = dai_find_type(type);
+
+	return (dti && dti->num_dais > 0) ? dti->dai_array[0].drv : NULL;
+}
+
 struct dai *dai_get(uint32_t type, uint32_t index, uint32_t flags)
 {
 	int ret = 0;

@@ -17,6 +17,7 @@
 #define __IPC_DAI_INTEL_H__
 
 #include <ipc/header.h>
+#include <ipc/channel_map.h>
 #include <stdint.h>
 
  /* ssc1: TINTE */
@@ -103,6 +104,13 @@ struct sof_ipc_dai_alh_params {
 	/* reserved for future use */
 	uint32_t reserved[15];
 } __attribute__((packed));
+
+struct sof_ipc_dai_multidai_params {
+	struct sof_ipc_hdr hdr;
+	uint32_t channel_bytes;
+	uint32_t dai_type;
+	struct sof_ipc_stream_map stream_map;
+};
 
 /* DMIC Configuration Request - SOF_IPC_DAI_DMIC_CONFIG */
 

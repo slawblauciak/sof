@@ -464,7 +464,7 @@ static int dw_dma_set_config(struct dma_chan_data *channel,
 	int ret = 0;
 	int i;
 
-	tracev_dwdma("dw_dma_set_config(): dma %d channel %d config",
+	trace_dwdma("dw_dma_set_config(): dma %d channel %d config",
 		     channel->dma->plat_data.id, channel->index);
 
 	irq_local_disable(flags);

@@ -16,6 +16,7 @@
 #ifndef __SOF_LIB_DMA_H__
 #define __SOF_LIB_DMA_H__
 
+#include <ipc/channel_map.h>
 #include <platform/lib/dma.h>
 #include <sof/atomic.h>
 #include <sof/bit.h>
@@ -45,6 +46,7 @@ struct comp_buffer;
 #define DMA_CAP_HDA		BIT(0) /**< HDA DMA */
 #define DMA_CAP_GP_LP		BIT(1) /**< GP LP DMA */
 #define DMA_CAP_GP_HP		BIT(2) /**< GP HP DMA */
+#define DMA_CAP_MULTI		BIT(3) /**< MultiDMA */
 
 /* DMA dev type bitmasks used to define the type of DMA */
 
@@ -56,6 +58,7 @@ struct comp_buffer;
 #define DMA_DEV_ALH		BIT(5) /**< connectable to ALH link */
 #define DMA_DEV_SAI		BIT(6) /**< connectable to SAI fifo */
 #define DMA_DEV_ESAI		BIT(7) /**< connectable to ESAI fifo */
+#define DMA_DEV_MULTI		BIT(8) /**< multiple fifos/links */
 
 /* DMA access privilege flag */
 #define DMA_ACCESS_EXCLUSIVE	1
@@ -94,6 +97,8 @@ enum dma_irq_cmd {
 #define DMA_ATTR_BUFFER_ADDRESS_ALIGNMENT	2
 #define DMA_ATTR_BUFFER_PERIOD_COUNT		3
 
+#define DMA_INFO_MAX_ELEMS		CHANNEL_MAP_MAX_LINKS
+
 struct dma;
 
 /**
@@ -121,6 +126,28 @@ struct dma_sg_elem_array {
 	struct dma_sg_elem *elems;	/**< elements */
 };
 
+struct dma_p_info_elem {
+	uint32_t link_id;
+	uint32_t fifo;
+	uint32_t handshake;
+};
+
+struct dma_p_info {
+	uint32_t num_links;
+	struct dma_p_info_elem elems[DMA_INFO_MAX_ELEMS];
+};
+
+/**
+ * \brief Structure to hold multidma information
+ */
+struct dma_multi_info {
+	struct sof_ipc_stream_map *stream_map;
+	struct dma_p_info dma_info;
+	uint32_t ch_bytes;
+	uint32_t dma_caps;
+	uint32_t dma_dev;
+};
+
 /* DMA physical SG params */
 struct dma_sg_config {
 	uint32_t src_width;			/* in bytes */
@@ -132,6 +159,7 @@ struct dma_sg_config {
 	uint32_t cyclic;			/* circular buffer */
 	uint64_t period;
 	struct dma_sg_elem_array elem_array;	/* array of dma_sg elems */
+	struct dma_multi_info multi;
 	bool scatter;
 	bool irq_disabled;
 	/* true if configured DMA channel is the scheduling source */
