@@ -322,6 +322,10 @@ static int dw_dma_start(struct dma *dma, unsigned int channel)
 	dw_write(dma, DW_CFG_LOW(channel), chan->cfg_lo);
 	dw_write(dma, DW_CFG_HIGH(channel), chan->cfg_hi);
 
+	trace_dwdma("@@@@ cfgl %X", dw_read(dma, DW_CFG_LOW(channel)));
+	trace_dwdma("@@@@ cfgh %X", dw_read(dma, DW_CFG_HIGH(channel)));
+	trace_dwdma("@@@@ dar %X", dw_read(dma, DW_DAR(channel)));
+
 #if CONFIG_HW_LLI
 	if (lli->ctrl_lo & DW_CTLL_D_SCAT_EN) {
 		words_per_tfr = (lli->ctrl_hi & DW_CTLH_BLOCK_TS_MASK) >>

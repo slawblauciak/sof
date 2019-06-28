@@ -53,6 +53,7 @@
 struct dai_data {
 	/* local DMA config */
 	int chan;
+	uint32_t stream_id;
 	struct dma_sg_config config;
 	struct comp_buffer *dma_buffer;
 
@@ -239,7 +240,12 @@ static int dai_playback_params(struct comp_dev *dev, uint32_t period_bytes)
 	config->dest_width = comp_sample_bytes(dev);
 	config->cyclic = 1;
 	config->irq_disabled = pipeline_is_timer_driven(dev->pipeline);
-	config->dest_dev = dd->dai->plat_data.fifo[0].handshake;
+	config->dest_dev = dai_get_handshake(dd->dai, dev->params.direction,
+					     dd->stream_id);
+
+	trace_dai_with_ids(dev, "dai_playback_params() "
+			   "dest_dev = %d stream_id %d",
+			   config->dest_dev, dd->stream_id);
 
 	/* set up local and host DMA elems to reset values */
 	source_config = COMP_GET_CONFIG(dd->dma_buffer->source);
@@ -261,12 +267,18 @@ static int dai_playback_params(struct comp_dev *dev, uint32_t period_bytes)
 	}
 
 	if (!config->elem_array.elems) {
+		uint32_t fifo = dai_get_fifo(dd->dai, dev->params.direction,
+					     dd->stream_id);
+
+		trace_dai_with_ids(dev, "dai_playback_params() "
+				   "fifo %X", fifo);
+
 		err = dma_sg_alloc(&config->elem_array, RZONE_RUNTIME,
 				   config->direction,
 				   source_config->periods_sink,
 				   period_bytes,
 				   (uintptr_t)(dd->dma_buffer->r_ptr),
-				   dai_fifo(dd->dai, SOF_IPC_STREAM_PLAYBACK));
+				   fifo);
 		if (err < 0) {
 			trace_dai_error_with_ids(dev, "dai_playback_params() "
 						 "error: dma_sg_alloc() failed "
@@ -290,7 +302,12 @@ static int dai_capture_params(struct comp_dev *dev, uint32_t period_bytes)
 	config->direction = DMA_DIR_DEV_TO_MEM;
 	config->cyclic = 1;
 	config->irq_disabled = pipeline_is_timer_driven(dev->pipeline);
-	config->src_dev = dd->dai->plat_data.fifo[1].handshake;
+	config->src_dev = dai_get_handshake(dd->dai, dev->params.direction,
+					    dd->stream_id);
+
+	trace_dai_with_ids(dev, "dai_capture_params() "
+			   "src_dev = %d stream_id %d",
+			   config->src_dev, dd->stream_id);
 
 	/* TODO: Make this code platform-specific or move it driver callback */
 	if (dai_get_info(dd->dai, DAI_INFO_TYPE) == SOF_DAI_INTEL_DMIC) {
@@ -325,12 +342,18 @@ static int dai_capture_params(struct comp_dev *dev, uint32_t period_bytes)
 	}
 
 	if (!config->elem_array.elems) {
+		uint32_t fifo = dai_get_fifo(dd->dai, dev->params.direction,
+					     dd->stream_id);
+
+		trace_dai_with_ids(dev, "dai_capture_params() "
+				   "fifo %X", fifo);
+
 		err = dma_sg_alloc(&config->elem_array, RZONE_RUNTIME,
 				   config->direction,
 				   sink_config->periods_source,
 				   period_bytes,
 				   (uintptr_t)(dd->dma_buffer->w_ptr),
-				   dai_fifo(dd->dai, SOF_IPC_STREAM_CAPTURE));
+				   fifo);
 		if (err < 0) {
 			trace_dai_error_with_ids(dev, "dai_capture_params() "
 						 "error: dma_sg_alloc() failed "
@@ -736,6 +759,7 @@ static int dai_config(struct comp_dev *dev, struct sof_ipc_dai_config *config)
 		 * not during topology parsing.
 		 */
 		channel = config->alh.stream_id;
+		dd->stream_id = config->alh.stream_id;
 		trace_dai_with_ids(dev, "dai_config(), channel = %d",
 				   channel);
 
