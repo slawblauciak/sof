@@ -244,8 +244,10 @@ static int dai_playback_params(struct comp_dev *dev, uint32_t period_bytes)
 					     dd->stream_id);
 
 	trace_dai_with_ids(dev, "dai_playback_params() "
-			   "dest_dev = %d stream_id %d",
-			   config->dest_dev, dd->stream_id);
+			   "dest_dev = %d stream_id = %d "
+			   "src_width = %d dest_width = %d",
+			   config->dest_dev, dd->stream_id,
+			   config->src_width, config->dest_width);
 
 	/* set up local and host DMA elems to reset values */
 	source_config = COMP_GET_CONFIG(dd->dma_buffer->source);
@@ -306,8 +308,10 @@ static int dai_capture_params(struct comp_dev *dev, uint32_t period_bytes)
 					    dd->stream_id);
 
 	trace_dai_with_ids(dev, "dai_capture_params() "
-			   "src_dev = %d stream_id %d",
-			   config->src_dev, dd->stream_id);
+			   "src_dev = %d stream_id = %d "
+			   "src_width = %d dest_width = %d",
+			   config->src_dev, dd->stream_id,
+			   config->src_width, config->dest_width);
 
 	/* TODO: Make this code platform-specific or move it driver callback */
 	if (dai_get_info(dd->dai, DAI_INFO_TYPE) == SOF_DAI_INTEL_DMIC) {
