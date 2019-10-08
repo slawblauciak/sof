@@ -107,6 +107,9 @@ static void notify_host(struct comp_dev *dev)
 	event.num_elems = 0;
 
 	ipc_send_comp_notification(dev, &event);
+
+	/* HACK: Send the IPC before the draining starts */
+	ipc_process_msg_queue();
 }
 
 static void notify_kpb(struct comp_dev *dev)
