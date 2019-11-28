@@ -16,13 +16,14 @@
 #ifndef __SOF_LIB_DMA_H__
 #define __SOF_LIB_DMA_H__
 
-#include <ipc/channel_map.h>
 #include <platform/lib/dma.h>
 #include <sof/atomic.h>
 #include <sof/bit.h>
+#include <sof/audio/channel_map.h>
 #include <sof/lib/cache.h>
 #include <sof/lib/io.h>
 #include <sof/spinlock.h>
+#include <ipc/channel_map.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -97,7 +98,7 @@ enum dma_irq_cmd {
 #define DMA_ATTR_BUFFER_ADDRESS_ALIGNMENT	2
 #define DMA_ATTR_BUFFER_PERIOD_COUNT		3
 
-#define DMA_INFO_MAX_ELEMS		CHANNEL_MAP_MAX_LINKS
+#define DMA_INFO_MAX_ELEMS	CHANNEL_MAP_MAX_LINKS
 
 struct dma;
 

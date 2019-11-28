@@ -12,7 +12,7 @@
 
 #define MULTIDMA_MAX_CHANS	4
 #define MULTIDMA_MAX_LINKS	CHANNEL_MAP_MAX_LINKS
-#define MULTIDMA_MAX_TXFORMS    CHANNEL_MAP_MAX_ELEMS
+#define MULTIDMA_MAX_TXFORMS    8
 
 #define MULTIDMA_BUF_ALIGN      4
 #define MULTIDMA_CPY_ALIGN      4
@@ -48,6 +48,7 @@ struct multidma_chan_data {
 	uint32_t cb_expected;
 	uint32_t last_copy_bytes;
 	uint32_t link_buf_bytes;
+	int foobar;
 	void *buf;
 };
 

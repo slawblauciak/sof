@@ -11,6 +11,9 @@
 #include <ipc/channel_map.h>
 #include <stdint.h>
 
+/* Maximum supported number of unique DAIs in a map */
+#define CHANNEL_MAP_MAX_LINKS 4
+
 /* Returns the size of a channel map in bytes */
 static inline uint32_t chmap_get_size(struct sof_ipc_channel_map *chmap)
 {

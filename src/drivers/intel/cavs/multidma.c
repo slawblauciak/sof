@@ -29,12 +29,22 @@ static void multidma_callback(void *data, uint32_t type,
 
 	next->status = DMA_CB_STATUS_RELOAD;
 	chdata->cb_expected--;
+	chdata->last_copy_bytes += next->elem.size;
+	next_data.elem.size = chdata->last_copy_bytes;
 
 	tracev_multidma("multidma_callback() cb_expected %u",
 			chdata->cb_expected);
 
-	if (!chdata->cb_expected)
+	if (chdata->foobar) {
+		trace_multidma("multidma_callback() cpy %d",
+			       next->elem.size);
+	}
+
+	if (!chdata->cb_expected) {
 		chan->cb(chan->cb_data, DMA_CB_TYPE_COPY, &next_data);
+		if (chdata->foobar)
+			chdata->foobar = 0;
+	}
 }
 
 static int multidma_has_link(struct dma_chan_data *chan, uint32_t link)
@@ -50,6 +60,8 @@ static int multidma_has_link(struct dma_chan_data *chan, uint32_t link)
 
 	return has_link;
 }
+
+int ___ptrdbg;
 
 static void multidma_free_links(struct dma_chan_data *chan)
 {
@@ -153,9 +165,19 @@ static int multidma_release_links(struct dma_chan_data *chan)
 
 	trace_multidma("multidma_release_links(): channel %d", chan->index);
 
+	chdata->cb_expected += chdata->num_links;
+
 	for (i = 0; i < chdata->num_links; ++i) {
+		___ptrdbg = i == 0 ? 2 : 0;
+
+		if (___ptrdbg)
+			trace_multidma("REL MULTIDMA PTR %d",
+				       (uint32_t)chdata->links[i].buf_w_ptr -
+				       (uint32_t)chdata->links[i].buf);
+
 		if (chdata->links[i].channel >= 0)
 			ret = dma_release(chdata->links[i].channel);
+		else chdata->cb_expected--;
 
 		if (ret) {
 			trace_multidma_error("multidma_release_links(): "
@@ -185,7 +207,7 @@ static int multidma_init_links(struct dma_chan_data *chan,
 	stream_map = config->multi.stream_map;
 
 	for (i = 0; i < stream_map->num_ch_map; ++i) {
-		ch_map = get_channel_map(stream_map, i);
+		ch_map = chmap_get(stream_map, i);
 		cur_link_id = ch_map->ext_id;
 
 		if (cur_link_id < 0 ||
@@ -309,13 +331,17 @@ static uint32_t multidma_copy_link_bufs(struct dma_chan_data *chan,
 	uint32_t copied = 0;
 	int i;
 
-	for (i = 0; i < chdata->num_links; ++i)
+	for (i = 0; i < chdata->num_links; ++i) {
+		___ptrdbg = i == 0 ? 1 : 0;
 		copied += multidma_copy_link_frame(chdata, &chdata->links[i]);
+	}
 
 	chdata->src_r_ptr = (char *)chdata->src_r_ptr + copied;
 
 	return copied;
 }
+
+uint32_t ___mdmaprevptr;
 
 static int multidma_copy_links(struct dma_chan_data *chan, int bytes,
 			       uint32_t flags)
@@ -327,11 +353,27 @@ static int multidma_copy_links(struct dma_chan_data *chan, int bytes,
 	chdata->cb_expected += chdata->num_links;
 
 	for (i = 0; i < chdata->num_links; ++i) {
+		___ptrdbg = i == 1 ? 1 : 0;
+
+		if (i == 1)
+			trace_multidma("MULTIDMA PTR %d %d %d %d",
+				       ___mdmaprevptr,
+				       (uint32_t)chdata->links[1].buf_w_ptr -
+				       (uint32_t)chdata->links[1].buf,
+				       (uint32_t)chdata->links[1].buf_w_ptr -
+				       ___mdmaprevptr,
+				       bytes);
+		else
+			___mdmaprevptr = (uint32_t)chdata->links[0].buf_w_ptr -
+				(uint32_t)chdata->links[0].buf;
+
 		dcache_writeback_region(chdata->links[i].buf,
 					chdata->src_bytes / chdata->num_links);
 
 		ret = dma_copy(chdata->links[i].channel,
 			       bytes / chdata->num_links, flags);
+
+		___ptrdbg = 0;
 
 		if (ret < 0) {
 			trace_multidma_error("multidma_copy_links(): "
@@ -363,13 +405,14 @@ static int multidma_get_burst_size(struct dma_chan_data *chan)
 }
 
 static int multidma_copy_ch(struct dma_chan_data *chan, int bytes,
-			    uint32_t flags)
+			    uint32_t flags, bool copy_links)
 {
 	struct multidma_chan_data *chdata = dma_chan_get_data(chan);
 	uint32_t burst_size = multidma_get_burst_size(chan);
 	uint32_t bytes_until_wrap;
 	uint32_t bytes_after_wrap;
 	uint32_t to_copy;
+	int ret = 0;
 
 	if (bytes < burst_size) {
 		trace_multidma_error("multidma_copy_ch(): "
@@ -400,9 +443,12 @@ static int multidma_copy_ch(struct dma_chan_data *chan, int bytes,
 	while (bytes_after_wrap)
 		bytes_after_wrap -= multidma_copy_link_bufs(chan, flags);
 
-	chdata->last_copy_bytes = to_copy;
+	chdata->last_copy_bytes = 0;
 
-	return multidma_copy_links(chan, to_copy, flags);
+	if (copy_links)
+		ret = multidma_copy_links(chan, to_copy, flags);
+
+	return ret;
 }
 
 static int multidma_copy(struct dma_chan_data *chan, int bytes, uint32_t flags)
@@ -412,7 +458,7 @@ static int multidma_copy(struct dma_chan_data *chan, int bytes, uint32_t flags)
 
 	spin_lock_irq(chan->dma->lock, lock_flags);
 
-	ret = multidma_copy_ch(chan, bytes, flags);
+	ret = multidma_copy_ch(chan, bytes, flags, true);
 
 	spin_unlock_irq(chan->dma->lock, lock_flags);
 
@@ -430,7 +476,8 @@ static int multidma_start(struct dma_chan_data *chan)
 
 	spin_lock_irq(chan->dma->lock, lock_flags);
 
-	if (chan->status != COMP_STATE_PREPARE) {
+	if (chan->status != COMP_STATE_PREPARE &&
+	    chan->status != COMP_STATE_PAUSED) {
 		trace_multidma_error("multidma_start(): channel %d busy",
 				     chan->index);
 
@@ -462,8 +509,8 @@ static int multidma_start(struct dma_chan_data *chan)
 out:
 	spin_unlock_irq(chan->dma->lock, lock_flags);
 
-	if (!ret)
-		chan->cb(chan->cb_data, DMA_CB_TYPE_COPY, &next);
+	//if (!ret)
+	//	chan->cb(chan->cb_data, DMA_CB_TYPE_COPY, &next);
 
 	return ret;
 }
@@ -514,17 +561,30 @@ static int multidma_pause(struct dma_chan_data *chan)
 
 static int multidma_release(struct dma_chan_data *chan)
 {
+	struct multidma_chan_data *chdata = dma_chan_get_data(chan);
 	uint32_t lock_flags;
+	uint32_t next_period;
 	int ret = 0;
-
-	trace_multidma("multidma_release(): channel %d", chan->index);
 
 	spin_lock_irq(chan->dma->lock, lock_flags);
 
-	if (chan->status == COMP_STATE_PAUSED) {
-		ret = multidma_release_links(chan);
-		chan->status = COMP_STATE_ACTIVE;
-	}
+	chdata->foobar = 1;
+	// next_period = chdata->links[0].elem_array.elems[0].size -
+	// 	((uint32_t)chdata->links[0].buf_w_ptr %
+	// 	chdata->links[0].elem_array.elems[0].size);
+	// next_period *= chdata->num_links;
+	next_period = chdata->src_period_bytes -
+		((uint32_t)chdata->src_r_ptr % chdata->src_period_bytes);
+
+	trace_multidma("multidma_release(): channel %d, copy %d, ptr %d", chan->index,
+		       next_period,
+		       (uint32_t)chdata->links[0].buf_w_ptr -
+		       (uint32_t)chdata->links[0].buf);
+
+	if (next_period)
+		multidma_copy_ch(chan, next_period, 0, false);
+
+	ret = multidma_release_links(chan);
 
 	if (ret)
 		trace_multidma_error("multidma_release(): error, channel %d",
@@ -544,6 +604,8 @@ static int multidma_status(struct dma_chan_data *chan,
 	int ret = 0;
 
 	spin_lock_irq(chan->dma->lock, lock_flags);
+
+	/* TODO: generate our own status instead */
 
 	/* Take the status from the first child link */
 	for (i = 0; i < chdata->num_links; ++i) {
@@ -679,13 +741,16 @@ static int multidma_alloc_buffer(struct dma_chan_data *chan,
 		return -ENOMEM;
 	}
 
-	trace_multidma("multidma_alloc_buffer(): buf 0x%X - 0x%X",
+	trace_multidma("multidma_alloc_buffer(): buf 0x%X - 0x%X %d bytes",
 		       (uint32_t)chdata->buf,
-		       (uint32_t)chdata->buf + buf_size);
+		       (uint32_t)chdata->buf + buf_size,
+		       buf_size);
 
 	trace_multidma("multidma_alloc_buffer(): "
-		       "src period bytes %d link period bytes %d",
-		       src_period_size, targ_period_size);
+		       "src period bytes %d link period bytes %d "
+		       "num periods %d",
+		       src_period_size, targ_period_size,
+		       config->elem_array.count);
 
 	for (i = 0; i < chdata->num_links; ++i) {
 		link = &chdata->links[i];
@@ -728,7 +793,7 @@ static void multidma_set_link_channel(struct dma_sg_config *config,
 	int i;
 
 	for (i = 0; i < smap->num_ch_map; ++i) {
-		chmap = get_channel_map(smap, i);
+		chmap = chmap_get(smap, i);
 
 		if (chmap->ext_id == link->link && chmap->ch_mask & chmask) {
 			link->roffsets[link->num_txforms++] =

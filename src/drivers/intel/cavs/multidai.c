@@ -73,7 +73,7 @@ static int multidai_set_config(struct dai *dai,
 		       config->format);
 
 	for (i = 0; i < config->multi.stream_map.num_ch_map; ++i) {
-		ch_map = get_channel_map(&config->multi.stream_map, i);
+		ch_map = chmap_get(&config->multi.stream_map, i);
 
 		if (ch_map->ext_id != 0xFFFFFFFF)
 			multidai_make_child_dai(dai, config->multi.dai_type,
