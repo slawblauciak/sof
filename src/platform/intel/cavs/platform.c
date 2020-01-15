@@ -444,14 +444,17 @@ int platform_init(struct sof *sof)
 
 	/* initialize PM for boot */
 
-	/* request LP ring oscillator and wait for status ready */
-	shim_write(SHIM_CLKCTL, shim_read(SHIM_CLKCTL) | SHIM_CLKCTL_RLROSCC);
-	while (!(shim_read(SHIM_CLKSTS) & SHIM_CLKCTL_RLROSCC))
+	/* request LP and HP ring oscillators and wait for status ready */
+	shim_write(SHIM_CLKCTL, shim_read(SHIM_CLKCTL) | SHIM_CLKCTL_RLROSCC |
+		   SHIM_CLKCTL_RHROSCC);
+	while (!(shim_read(SHIM_CLKSTS) & (SHIM_CLKCTL_RLROSCC |
+		 SHIM_CLKCTL_RHROSCC)))
 		short_spin();
 
 	shim_write(SHIM_CLKCTL,
 		   SHIM_CLKCTL_RLROSCC | /* Request Low Performance RING Osc */
-		   SHIM_CLKCTL_OCS_LP_RING | /* Select LP RING Oscillator Clk
+		   SHIM_CLKCTL_RHROSCC | /* Request High Performance RING Osc */
+		   SHIM_CLKCTL_OCS_HP_RING | /* Select HP RING Oscillator Clk
 					      * for memory
 					      */
 		   SHIM_CLKCTL_HMCS_DIV2 | /* HP mem clock div by 2 */

@@ -88,11 +88,27 @@ static void platform_pg_task(void)
 	}
 }
 
+static inline void short_spin(void)
+{
+	int i;
+
+	for (i = 0; i < 16; i++)
+		asm volatile("nop");
+}
+
 static void platform_pg_int_handler(void *arg)
 {
 	uint32_t dir = (uint32_t)arg;
 
 	if (dir == LPS_POWER_FLOW_D0_D0I3) {
+		shim_write(SHIM_CLKCTL, shim_read(SHIM_CLKCTL) &
+			   ~SHIM_CLKCTL_RHROSCC);
+
+		while (!(shim_read(SHIM_CLKSTS) & ~SHIM_CLKCTL_RHROSCC))
+			short_spin();
+
+		clock_set_low_freq();
+
 		pm_runtime_put(PM_RUNTIME_DSP, PLATFORM_MASTER_CORE_ID);
 
 		/* init power flow task */
@@ -107,6 +123,14 @@ static void platform_pg_int_handler(void *arg)
 
 		arch_interrupt_disable_mask(0xffffffff);
 	} else {
+		shim_write(SHIM_CLKCTL, shim_read(SHIM_CLKCTL) |
+			   SHIM_CLKCTL_RLROSCC | SHIM_CLKCTL_RHROSCC);
+
+		while (!(shim_read(SHIM_CLKSTS) & SHIM_CLKCTL_RHROSCC))
+			short_spin();
+
+		clock_set_high_freq();
+
 		pm_runtime_get(PM_RUNTIME_DSP, PLATFORM_MASTER_CORE_ID);
 
 		/* set TCB to the one stored in platform_power_gate() */
