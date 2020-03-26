@@ -162,43 +162,25 @@ static uint8_t get_stream_index(struct comp_data *cd, uint32_t pipe_id)
 	return 0;
 }
 
-static int mux_verify_params(struct comp_dev *dev,
-			     struct sof_ipc_stream_params *params)
-{
-	int ret;
-
-	comp_dbg(dev, "mux_verify_params()");
-
-	ret = comp_verify_params(dev, BUFF_PARAMS_CHANNELS, params);
-	if (ret < 0) {
-		comp_err(dev, "mux_verify_params() error: comp_verify_params() failed.");
-		return ret;
-	}
-
-	return 0;
-}
-
 /* set component audio stream parameters */
 static int mux_params(struct comp_dev *dev,
 		      struct sof_ipc_stream_params *params)
 {
 	struct comp_data *cd = comp_get_drvdata(dev);
 	struct comp_buffer *sinkb;
-	int err;
+	struct list_item *sink_list_item;
 
 	comp_info(dev, "mux_params()");
 
-	err = mux_verify_params(dev, params);
-	if (err < 0) {
-		comp_err(dev, "mux_fir_params(): pcm params verification failed.");
-		return -EINVAL;
+	list_for_item(sink_list_item, &dev->bsink_list) {
+		sinkb = container_of(sink_list_item, struct comp_buffer,
+				     source_list);
+
+		buffer_set_params(sinkb, params, true);
+		sinkb->stream.channels = cd->config.num_channels;
 	}
 
-	sinkb = list_first_item(&dev->bsink_list, struct comp_buffer,
-				  source_list);
-
-	cd->config.num_channels = sinkb->stream.channels;
-	cd->config.frame_format = sinkb->stream.frame_fmt;
+	params->channels = cd->config.num_channels;
 
 	return 0;
 }
