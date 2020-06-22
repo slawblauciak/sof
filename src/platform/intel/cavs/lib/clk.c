@@ -76,10 +76,7 @@ static inline void select_cpu_clock(int freq_idx, bool release_unused)
 			       sizeof(*clk_info) * PLATFORM_CORE_COUNT);
 }
 
-#if CONFIG_CAVS_USE_LPRO_IN_WAITI
-/* Store clock source that was active before going to waiti,
- * so it can be restored on wake up.
- */
+/* Clock source to be used when not waiting for an interrupt. */
 static SHARED_DATA int active_freq_idx = CPU_DEFAULT_IDX;
 
 static inline int get_cpu_current_freq_idx(void)
@@ -95,7 +92,7 @@ static inline void set_cpu_current_freq_idx(int freq_idx, bool release_unused)
 	*cache_to_uncache(&active_freq_idx) = freq_idx;
 }
 
-void platform_clock_on_wakeup(void)
+void platform_enable_active_clock(void)
 {
 	int freq_idx = *cache_to_uncache(&active_freq_idx);
 
@@ -104,6 +101,7 @@ void platform_clock_on_wakeup(void)
 	}
 }
 
+#if CONFIG_CAVS_USE_LPRO_IN_WAITI
 void platform_clock_on_waiti(void)
 {
 	int freq_idx = get_cpu_current_freq_idx();
@@ -117,18 +115,17 @@ void platform_clock_on_waiti(void)
 		select_cpu_clock(CPU_LPRO_FREQ_IDX, false);
 	}
 }
-
-#else
-static inline void set_cpu_current_freq_idx(int freq_idx, bool release_unused)
-{
-	select_cpu_clock(freq_idx, true);
-}
 #endif
 
 static int clock_platform_set_cpu_freq(int clock, int freq_idx)
 {
 	set_cpu_current_freq_idx(freq_idx, true);
 	return 0;
+}
+
+void platform_set_active_clock(int index)
+{
+	*cache_to_uncache(&active_freq_idx) = index;
 }
 
 void platform_clock_init(struct sof *sof)
