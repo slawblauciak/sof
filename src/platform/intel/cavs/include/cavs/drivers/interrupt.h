@@ -20,7 +20,7 @@ extern const char irq_name_level5[];
 #if CONFIG_CAVS_USE_LPRO_IN_WAITI
 static inline void platform_interrupt_on_wakeup(void)
 {
-	platform_clock_on_wakeup();
+	platform_enable_active_clock();
 }
 #endif
 
