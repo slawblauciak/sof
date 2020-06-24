@@ -140,13 +140,13 @@ static const struct sof_ipc_window sram_window
 #endif
 
 #if CONFIG_CANNONLAKE || CONFIG_ICELAKE || CONFIG_TIGERLAKE
-#if CONFIG_CAVS_LPRO
+//#if CONFIG_CAVS_LPRO
 #define CAVS_DEFAULT_RO		SHIM_CLKCTL_RLROSCC
 #define CAVS_DEFAULT_RO_FOR_MEM	SHIM_CLKCTL_OCS_LP_RING
-#else
-#define CAVS_DEFAULT_RO		SHIM_CLKCTL_RHROSCC
-#define CAVS_DEFAULT_RO_FOR_MEM	SHIM_CLKCTL_OCS_HP_RING
-#endif
+//#else
+//#define CAVS_DEFAULT_RO		SHIM_CLKCTL_RHROSCC
+//#define CAVS_DEFAULT_RO_FOR_MEM	SHIM_CLKCTL_OCS_HP_RING
+//#endif
 #endif
 
 #if CONFIG_DW_GPIO
@@ -521,7 +521,7 @@ int platform_init(struct sof *sof)
 void platform_wait_for_interrupt(int level)
 {
 #if CONFIG_CAVS_USE_LPRO_IN_WAITI
-	platform_clock_on_waiti();
+	//platform_clock_on_waiti();
 #endif
 #if (CONFIG_CAVS_LPS)
 	if (pm_runtime_is_active(PM_RUNTIME_DSP, PLATFORM_MASTER_CORE_ID))
