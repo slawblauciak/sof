@@ -433,13 +433,15 @@ int platform_init(struct sof *sof)
 
 	/* initialize PM for boot */
 
+#define FOOBAR_RO (SHIM_CLKCTL_RLROSCC | SHIM_CLKCTL_RHROSCC)
+
 	/* request configured ring oscillator and wait for status ready */
-	shim_write(SHIM_CLKCTL, shim_read(SHIM_CLKCTL) | CAVS_DEFAULT_RO);
-	while (!(shim_read(SHIM_CLKSTS) & CAVS_DEFAULT_RO))
+	shim_write(SHIM_CLKCTL, shim_read(SHIM_CLKCTL) | FOOBAR_RO);
+	while (!(shim_read(SHIM_CLKSTS) & FOOBAR_RO))
 		idelay(16);
 
 	shim_write(SHIM_CLKCTL,
-		   CAVS_DEFAULT_RO | /* Request configured RING Osc */
+		   FOOBAR_RO | /* Request configured RING Osc */
 		   CAVS_DEFAULT_RO_FOR_MEM | /* Select configured
 					     * RING Oscillator Clk for memory
 					     */
@@ -530,7 +532,7 @@ int platform_init(struct sof *sof)
 
 void platform_wait_for_interrupt(int level)
 {
-	platform_clock_on_waiti();
+	//platform_clock_on_waiti();
 
 #if (CONFIG_CAVS_LPS)
 	if (pm_runtime_is_active(PM_RUNTIME_DSP, PLATFORM_MASTER_CORE_ID))
