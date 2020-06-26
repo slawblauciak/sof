@@ -33,6 +33,12 @@ extern struct xtos_core_data *core_data_ptr[PLATFORM_CORE_COUNT];
 
 static uint32_t active_cores_mask;
 
+#include <sof/trace/trace.h>
+#include <ipc/trace.h>
+#include <user/trace.h>
+
+extern struct tr_ctx ipc_tr;
+
 #if CONFIG_NO_SLAVE_CORE_ROM
 extern void *shared_vecbase_ptr;
 extern uint8_t _WindowOverflow4[];
@@ -167,7 +173,7 @@ void cpu_power_down_core(void)
 	free_system_notify();
 
 	/* free entire sys heap, an instance dedicated for this core */
-	free_heap(SOF_MEM_ZONE_SYS);
+	free_heap(SOF_MEM_ZONE_SYS, cpu_get_id());
 
 	dcache_writeback_invalidate_all();
 

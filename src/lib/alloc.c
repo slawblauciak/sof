@@ -964,7 +964,7 @@ int mm_pm_context_restore(struct dma_copy *dc, struct dma_sg_config *sg)
 	return -ENOTSUP;
 }
 
-void free_heap(enum mem_zone zone)
+void free_heap(enum mem_zone zone, int core)
 {
 	struct mm *memmap = memmap_get();
 	struct mm_heap *cpu_heap;
@@ -972,13 +972,13 @@ void free_heap(enum mem_zone zone)
 	/* to be called by slave cores only for sys heap,
 	 * otherwise this is critical flow issue.
 	 */
-	if (cpu_get_id() == PLATFORM_MASTER_CORE_ID ||
+	if (core == PLATFORM_MASTER_CORE_ID ||
 	    zone != SOF_MEM_ZONE_SYS) {
 		tr_err(&mem_tr, "free_heap(): critical flow issue");
 		panic(SOF_IPC_PANIC_MEM);
 	}
 
-	cpu_heap = memmap->system + cpu_get_id();
+	cpu_heap = memmap->system + core;
 	cpu_heap->info.used = 0;
 	cpu_heap->info.free = cpu_heap->size;
 

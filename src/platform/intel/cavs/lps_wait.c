@@ -101,8 +101,6 @@ static void platform_pg_int_handler(void *arg)
 
 	if (dir == LPS_POWER_FLOW_D0_D0I3) {
 		pm_runtime_put(PM_RUNTIME_DSP, PLATFORM_MASTER_CORE_ID);
-		platform_set_active_clock(CPU_LPRO_FREQ_IDX);
-		platform_enable_active_clock();
 
 		/* init power flow task */
 		if (!pg_task_ctx)

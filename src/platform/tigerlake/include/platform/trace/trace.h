@@ -21,8 +21,10 @@
 /* Platform defined trace code */
 static inline void platform_trace_point(uint32_t x)
 {
+	//if(x != 0x1337) return;
 	int cpu = cpu_get_id();
 	uint32_t offset;
+
 
 	if (cpu == PLATFORM_MASTER_CORE_ID)
 		offset = SRAM_REG_FW_TRACEP;
