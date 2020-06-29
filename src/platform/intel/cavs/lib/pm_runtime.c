@@ -42,6 +42,8 @@ DECLARE_SOF_UUID("power", power_uuid, 0x76cc9773, 0x440c, 0x4df9,
 
 DECLARE_TR_CTX(power_tr, SOF_UUID(power_uuid), LOG_LEVEL_INFO);
 
+static int dsp_sref[PLATFORM_CORE_COUNT];	/**< simple ref counter */
+
 /** \brief Registers Host DMA access by incrementing ref counter. */
 static void cavs_pm_runtime_host_dma_l1_entry(void)
 {
@@ -368,6 +370,7 @@ static inline void cavs_pm_runtime_dis_dsp_pg(uint32_t index)
 		if (tries == 0)
 			tr_err(&power_tr, "cavs_pm_runtime_dis_dsp_pg(): failed to power up core %d",
 			       index);
+		++dsp_sref[index];
 	}
 #endif
 }
@@ -388,7 +391,7 @@ static inline void cavs_pm_runtime_en_dsp_pg(uint32_t index)
 		lps_ctl |= SHIM_LPSCTL_BID | SHIM_LPSCTL_BATTR_0;
 		lps_ctl &= ~SHIM_LPSCTL_FDSPRUN;
 		shim_write(SHIM_LPSCTL, lps_ctl);
-	} else {
+	} else if (--dsp_sref[index] <= 0) {
 		shim_write16(SHIM_PWRCTL, shim_read16(SHIM_PWRCTL) &
 			     ~SHIM_PWRCTL_TCPDSPPG(index));
 	}
