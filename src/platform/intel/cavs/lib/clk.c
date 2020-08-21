@@ -9,7 +9,6 @@
 #include <sof/lib/clk.h>
 #include <sof/lib/memory.h>
 #include <sof/lib/notifier.h>
-#include <sof/lib/pm_runtime.h>
 #include <sof/sof.h>
 #include <sof/spinlock.h>
 
@@ -33,7 +32,7 @@ static inline void select_cpu_clock(int freq_idx, bool release_unused)
 
 #if CONFIG_TIGERLAKE
 	if (freq_idx == CPU_HPRO_FREQ_IDX)
-		pm_runtime_get(PM_RUNTIME_DSP, PWRD_BY_HPRO | (PLATFORM_CORE_COUNT - 1));
+		cpu_enable_core(PLATFORM_CORE_COUNT - 1);
 #endif
 
 	/* request clock */
@@ -56,7 +55,7 @@ static inline void select_cpu_clock(int freq_idx, bool release_unused)
 			      ~SHIM_CLKCTL_OSC_REQUEST_MASK) | enc);
 #if CONFIG_TIGERLAKE
 		if (freq_idx != CPU_HPRO_FREQ_IDX)
-			pm_runtime_put(PM_RUNTIME_DSP, PWRD_BY_HPRO | (PLATFORM_CORE_COUNT - 1));
+			cpu_disable_core(PLATFORM_CORE_COUNT - 1);
 #endif
 	}
 }
