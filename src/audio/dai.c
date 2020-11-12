@@ -41,6 +41,9 @@ DECLARE_SOF_RT_UUID("dai", dai_comp_uuid, 0xc2b00d27, 0xffbc, 0x4150,
 
 DECLARE_TR_CTX(dai_comp_tr, SOF_UUID(dai_comp_uuid), LOG_LEVEL_INFO);
 
+extern uint32_t kpb_dbg_drain_req;
+extern uint32_t kpb_dbg_drain_state;
+
 struct dai_data {
 	/* local DMA config */
 	struct dma_chan_data *chan;
@@ -569,6 +572,9 @@ static int dai_comp_trigger(struct comp_dev *dev, int cmd)
 	int ret;
 
 	comp_dbg(dev, "dai_comp_trigger(), command = %u", cmd);
+
+	comp_err(dev, "@@@ kpb_dbg_drain_req %u kpb_dbg_drain_state %u",
+		 kpb_dbg_drain_req, kpb_dbg_drain_state);
 
 	ret = comp_set_state(dev, cmd);
 	if (ret < 0)

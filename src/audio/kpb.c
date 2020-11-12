@@ -977,6 +977,9 @@ static int kpb_register_client(struct comp_data *kpb, struct kpb_client *cli)
 	return ret;
 }
 
+uint32_t kpb_dbg_drain_req;
+uint32_t kpb_dbg_drain_state;
+
 /**
  * \brief Prepare history buffer for draining.
  *
@@ -1009,15 +1012,21 @@ static void kpb_init_draining(struct comp_dev *dev, struct kpb_client *cli)
 	comp_info(dev, "kpb_init_draining(): requested draining of %d [ms] from history buffer",
 		  cli->drain_req);
 
+	kpb_dbg_drain_req = cli->drain_req;
+
 	if (kpb->state != KPB_STATE_RUN) {
 		comp_err(dev, "kpb_init_draining(): wrong KPB state");
+		kpb_dbg_drain_state = 1;
 	} else if (cli->id > KPB_MAX_NO_OF_CLIENTS) {
 		comp_err(dev, "kpb_init_draining(): wrong client id");
+		kpb_dbg_drain_state = 2;
 	/* TODO: check also if client is registered */
 	} else if (!is_sink_ready) {
 		comp_err(dev, "kpb_init_draining(): sink not ready for draining");
+		kpb_dbg_drain_state = 3;
 	} else if (kpb->hd.buffered < drain_req ||
 		   cli->drain_req > KPB_MAX_DRAINING_REQ) {
+		kpb_dbg_drain_state = 4;
 		comp_cl_err(&comp_kpb, "kpb_init_draining(): not enough data in history buffer");
 	} else {
 		/* Draining accepted, find proper buffer to start reading
@@ -1026,6 +1035,7 @@ static void kpb_init_draining(struct comp_dev *dev, struct kpb_client *cli)
 		 * read pointer from which we will start draining.
 		 */
 		spin_lock_irq(&kpb->lock, flags);
+		kpb_dbg_drain_state = 5;
 
 		kpb_change_state(kpb, KPB_STATE_INIT_DRAINING);
 
