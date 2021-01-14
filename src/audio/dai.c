@@ -432,6 +432,26 @@ static int dai_capture_params(struct comp_dev *dev, uint32_t period_bytes,
 	return 0;
 }
 
+static void foobar_debug_ll(struct comp_dev *dev)
+{
+	uint64_t REG_SHIM_DSPWCT0C = shim_read64(SHIM_DSPWCT0C);
+	uint32_t REG_SHIM_DSPWCT0C_HI = REG_SHIM_DSPWCT0C >> 32;
+	uint32_t REG_SHIM_DSPWCT0C_LO = REG_SHIM_DSPWCT0C;
+
+	comp_err(dev, "@@@ SHIM_DSPWCT0C %X%X",
+		 REG_SHIM_DSPWCT0C_HI, REG_SHIM_DSPWCT0C_LO);
+
+	comp_err(dev, "@@@ SHIM_DSPWCTCS %X",
+		 shim_read(SHIM_DSPWCTCS));
+
+	uint64_t REG_SHIM_DSPWC = shim_read64(SHIM_DSPWC);
+	uint32_t REG_SHIM_DSPWC_HI = REG_SHIM_DSPWC >> 32;
+	uint32_t REG_SHIM_DSPWC_LO = REG_SHIM_DSPWC;
+
+	comp_err(dev, "@@@ SHIM_DSPWC %X%X",
+		 REG_SHIM_DSPWC_HI, REG_SHIM_DSPWC_LO);
+}
+
 static int dai_params(struct comp_dev *dev,
 		      struct sof_ipc_stream_params *params)
 {
@@ -447,6 +467,8 @@ static int dai_params(struct comp_dev *dev,
 	int err;
 
 	comp_dbg(dev, "dai_params()");
+
+	foobar_debug_ll(dev);
 
 	err = dai_verify_params(dev, params);
 	if (err < 0) {

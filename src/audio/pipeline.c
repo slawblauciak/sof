@@ -1195,12 +1195,38 @@ static void pipeline_schedule_cancel(struct pipeline *p)
 		sa_set_panic_on_delay(true);
 }
 
+extern uint64_t foobar_irqs;
+extern uint32_t foobar_clk_time;
+extern int foobar_cur_clk;
+
 static enum task_state pipeline_task(void *arg)
 {
 	struct pipeline *p = arg;
 	int err;
+	uint32_t foobar_irq_delta;
+	uint64_t cur_time = platform_timer_get(timer_get());
+	uint32_t t0_delta;
 
 	pipe_dbg(p, "pipeline_task()");
+
+	p->heartbeat++;
+
+	if (!p->first_task)
+		p->first_task = cur_time;
+
+	if (p->heartbeat > 2000) {
+		foobar_irq_delta = foobar_irqs - p->last_irqs;
+		t0_delta = (cur_time - p->first_task) %
+			clock_ms_to_ticks(PLATFORM_DEFAULT_CLOCK,
+					  p->ipc_pipe.period / 1000);
+
+		pipe_err(p, "@@@ PIPELINE HEARTBEAT, IRQ DELTA %d, CLK TIME %d, T0 DELTA %d",
+			 foobar_irq_delta, foobar_clk_time, t0_delta);
+
+		p->last_irqs = foobar_irqs;
+		p->heartbeat = 0;
+		foobar_clk_time = 0;
+	}
 
 	/* are we in xrun ? */
 	if (p->xrun_bytes) {

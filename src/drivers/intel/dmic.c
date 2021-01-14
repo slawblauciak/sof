@@ -1526,6 +1526,7 @@ static void dmic_irq_handler(void *data)
 	struct dai *dai = data;
 	uint32_t val0;
 	uint32_t val1;
+	int stop = 0;
 
 	/* Trace OUTSTAT0 register */
 	val0 = dai_read(dai, OUTSTAT0);
@@ -1536,12 +1537,17 @@ static void dmic_irq_handler(void *data)
 	if (val0 & OUTSTAT0_ROR_BIT) {
 		dai_err(dai, "dmic_irq_handler(): full fifo A or PDM overrun");
 		dai_write(dai, OUTSTAT0, val0);
+		stop = 1;
 	}
 
 	if (val1 & OUTSTAT1_ROR_BIT) {
 		dai_err(dai, "dmic_irq_handler(): full fifo B or PDM overrun");
 		dai_write(dai, OUTSTAT1, val1);
+		stop = 1;
 	}
+
+	if (stop)
+		dmic_stop(dai);
 }
 
 static int dmic_probe(struct dai *dai)
