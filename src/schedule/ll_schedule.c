@@ -200,6 +200,7 @@ static void schedule_ll_tasks_run(void *data)
 		       NOTIFIER_TARGET_CORE_LOCAL, NULL, 0);
 
 	perf_cnt_stamp(&sch->pcd, perf_ll_sched_trace, sch);
+	mailbox_sw_reg_write(SRAM_DBG_LL_CPU_DELTA, sch->pcd.cpu_delta_peak);
 
 	spin_lock(&sch->domain->lock);
 
