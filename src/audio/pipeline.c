@@ -73,6 +73,8 @@ struct pipeline *pipeline_new(struct sof_ipc_pipe_new *pipe_desc,
 	struct pipeline *p;
 	int ret;
 
+	pipe_cl_err("@@@ SCHED + TIMER");
+
 	pipe_cl_info("pipeline new pipe_id %d period %d priority %d",
 		     pipe_desc->pipeline_id, pipe_desc->period,
 		     pipe_desc->priority);
