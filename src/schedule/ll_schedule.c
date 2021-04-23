@@ -164,6 +164,8 @@ static void schedule_ll_clients_reschedule(struct ll_schedule_data *sch)
 
 	/* rearm only if there is work to do */
 	if (atomic_read(&sch->domain->total_num_tasks)) {
+		domain_set(sch->domain, sch->domain->next_tick);
+		schedule_ll_clients_enable(sch);
 		/* traverse to set timer according to the earliest task */
 		list_for_item_safe(wlist, tlist, &sch->tasks) {
 			task = container_of(wlist, struct task, list);

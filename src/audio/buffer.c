@@ -223,14 +223,14 @@ void comp_update_buffer_produce(struct comp_buffer *buffer, uint32_t bytes)
 	char *addr;
 
 	/* return if no bytes */
-	if (!bytes) {
-		buf_info(buffer, "comp_update_buffer_produce(), no bytes to produce, source->comp.id = %u, source->comp.type = %u, sink->comp.id = %u, sink->comp.type = %u",
-			 dev_comp_id(buffer->source),
-			 dev_comp_type(buffer->source),
-			 dev_comp_id(buffer->sink),
-			 dev_comp_type(buffer->sink));
-		return;
-	}
+//	if (!bytes) {
+//		buf_info(buffer, "comp_update_buffer_produce(), no bytes to produce, source->comp.id = %u, source->comp.type = %u, sink->comp.id = %u, sink->comp.type = %u",
+//			 dev_comp_id(buffer->source),
+//			 dev_comp_type(buffer->source),
+//			 dev_comp_id(buffer->sink),
+//			 dev_comp_type(buffer->sink));
+//		return;
+//	}
 
 	buffer_lock(buffer, &flags);
 
@@ -263,14 +263,14 @@ void comp_update_buffer_consume(struct comp_buffer *buffer, uint32_t bytes)
 	char *addr;
 
 	/* return if no bytes */
-	if (!bytes) {
-		buf_info(buffer, "comp_update_buffer_consume(), no bytes to consume, source->comp.id = %u, source->comp.type = %u, sink->comp.id = %u, sink->comp.type = %u",
-			 dev_comp_id(buffer->source),
-			 dev_comp_type(buffer->source),
-			 dev_comp_id(buffer->sink),
-			 dev_comp_type(buffer->sink));
-		return;
-	}
+//	if (!bytes) {
+//		buf_info(buffer, "comp_update_buffer_consume(), no bytes to consume, source->comp.id = %u, source->comp.type = %u, sink->comp.id = %u, sink->comp.type = %u",
+//			 dev_comp_id(buffer->source),
+//			 dev_comp_type(buffer->source),
+//			 dev_comp_id(buffer->sink),
+//			 dev_comp_type(buffer->sink));
+//		return;
+//	}
 
 	buffer_lock(buffer, &flags);
 

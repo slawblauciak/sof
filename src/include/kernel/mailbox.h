@@ -36,7 +36,9 @@
 #define SRAM_REG_R0_STATE_TRACE			SRAM_REG_R_STATE_TRACE_BASE
 #define SRAM_REG_R1_STATE_TRACE			0x38
 #define SRAM_REG_R2_STATE_TRACE			0x40
-#define SRAM_REG_FW_END				(SRAM_REG_R2_STATE_TRACE + 0x8)
+#define SRAM_REG_DEBUG_MARK         0x48
+#define SRAM_REG_DEBUG_1            0x4C
+#define SRAM_REG_FW_END				(SRAM_REG_DEBUG_1 + 0x8)
 
 /** @}*/
 
